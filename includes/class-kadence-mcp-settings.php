@@ -400,13 +400,42 @@ class Kadence_MCP_Settings {
 			esc_attr( self::OPTION_ENABLED_TOOLS )
 		);
 
-		foreach ( $groepen as $groep ) {
+		foreach ( $groepen as $sleutel => $groep ) {
 			if ( empty( $groep['items'] ) ) {
 				continue;
 			}
 
 			echo '<h2>' . esc_html( $groep['titel'] ) . '</h2>';
 			echo '<p class="description" style="max-width:46em">' . esc_html( $groep['uitleg'] ) . '</p>';
+
+			// Alles aanvinken per groep. Bewust per groep en niet één knop voor
+			// het hele scherm: lezen en schrijven zijn wezenlijk verschillende
+			// beslissingen, en één vinkje dat ze allebei aanzet nodigt uit tot
+			// precies de klik die je niet wil.
+			//
+			// Dit verkleint alleen het oppervlak; de grendel blijft de capability.
+			// Alle schrijftools aanzetten doet nog steeds niets voor een account
+			// zonder kadence_mcp_write.
+			$alles_aan = count( array_intersect( wp_list_pluck( $groep['items'], 'name' ), $ingeschakeld ) ) === count( $groep['items'] );
+			?>
+			<p>
+				<label>
+					<input type="checkbox"
+						class="kmcp-alles"
+						data-groep="<?php echo esc_attr( $sleutel ); ?>"
+						<?php checked( $alles_aan ); ?>>
+					<strong>
+						<?php
+						printf(
+							/* translators: %d: number of tools in this group. */
+							esc_html__( 'Alle %d aanvinken', 'mcp-abilities-kadence' ),
+							count( $groep['items'] )
+						);
+						?>
+					</strong>
+				</label>
+			</p>
+			<?php
 			echo '<table class="form-table" role="presentation"><tbody>';
 
 			foreach ( $groep['items'] as $definitie ) {
@@ -426,6 +455,8 @@ class Kadence_MCP_Settings {
 								id="<?php echo esc_attr( 'kmcp-' . sanitize_key( $naam ) ); ?>"
 								name="<?php echo esc_attr( self::OPTION_ENABLED_TOOLS ); ?>[]"
 								value="<?php echo esc_attr( $naam ); ?>"
+								class="kmcp-tool"
+								data-groep="<?php echo esc_attr( $sleutel ); ?>"
 								<?php checked( in_array( $naam, $ingeschakeld, true ) ); ?>>
 							<code><?php echo esc_html( $naam ); ?></code>
 							<?php if ( self::is_dedicated_endpoint() ) : ?>
@@ -450,6 +481,72 @@ class Kadence_MCP_Settings {
 
 			echo '</tbody></table>';
 		}
+
+		self::render_alles_script();
+	}
+
+	/**
+	 * De schakelaar achter "Alle N aanvinken".
+	 *
+	 * Inline en zonder afhankelijkheden: het is twintig regels op één scherm, en
+	 * een apart bestand plus een enqueue zou meer onderhoud kosten dan het waard
+	 * is. Er wordt niets opgeslagen — dit zet alleen vinkjes; opslaan doet het
+	 * formulier zoals altijd.
+	 *
+	 * De groepsvinkjes staan op indeterminate zodra een groep half aanstaat. Dat
+	 * is geen verfraaiing: een leeg vakje boven een half aangevinkte lijst leest
+	 * als "er staat niets aan", en dan klik je hem aan om te zien wat er gebeurt.
+	 *
+	 * @return void
+	 */
+	private static function render_alles_script() {
+		?>
+		<script>
+		( function () {
+			var groepen = {};
+
+			document.querySelectorAll( '.kmcp-alles' ).forEach( function ( knop ) {
+				groepen[ knop.dataset.groep ] = {
+					knop:  knop,
+					tools: document.querySelectorAll( '.kmcp-tool[data-groep="' + knop.dataset.groep + '"]' )
+				};
+			} );
+
+			function ververs( groep ) {
+				var aan = 0;
+
+				groep.tools.forEach( function ( tool ) {
+					if ( tool.checked ) {
+						aan++;
+					}
+				} );
+
+				groep.knop.checked       = aan === groep.tools.length;
+				groep.knop.indeterminate = aan > 0 && aan < groep.tools.length;
+			}
+
+			Object.keys( groepen ).forEach( function ( naam ) {
+				var groep = groepen[ naam ];
+
+				ververs( groep );
+
+				groep.knop.addEventListener( 'change', function () {
+					groep.tools.forEach( function ( tool ) {
+						tool.checked = groep.knop.checked;
+					} );
+
+					groep.knop.indeterminate = false;
+				} );
+
+				groep.tools.forEach( function ( tool ) {
+					tool.addEventListener( 'change', function () {
+						ververs( groep );
+					} );
+				} );
+			} );
+		}() );
+		</script>
+		<?php
 	}
 
 	/**

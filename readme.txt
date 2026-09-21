@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.19.0
+Stable tag: 1.20.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,10 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.20.0 =
+* Per groep een "Alle N aanvinken" op het instellingenscherm. Vijfendertig vakjes met de hand aanvinken is werk dat niemand hoort te doen, en het nodigt uit tot half afmaken. Bewust per groep en niet één knop voor het hele scherm: lezen en schrijven zijn verschillende beslissingen, en één vinkje dat ze allebei aanzet is precies de klik die je niet wil. Het groepsvakje staat op indeterminate zodra een groep half aanstaat — een leeg vakje boven een half aangevinkte lijst leest als "er staat niets aan", en dan klik je hem aan om te zien wat er gebeurt.
+* Dit verkleint alleen het oppervlak; de grendel blijft de capability. Alle schrijftools aanzetten doet nog steeds niets voor een account zonder kadence_mcp_write.
 
 = 1.19.0 =
 * De plugin werkt zichzelf bij vanaf GitHub, via plugin-update-checker. De repo is publiek, dus er is geen token nodig; de release-workflow bouwt een ZIP zodat de automatisch gegenereerde zipball van de tag — die ook .github/ bevat — nooit op een site belandt.
