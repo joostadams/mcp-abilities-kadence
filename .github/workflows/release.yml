@@ -1,0 +1,56 @@
+# Bouwt op een versietag een installeerbare ZIP en hangt die aan de release.
+#
+# Waarom een eigen ZIP en niet de zipball van de tag: die zipball bevat ook
+# .github/ en de git-metadata, en die horen niet in een plugin-map op een site.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # PUC vergelijkt de geïnstalleerde versie met de Version-header op de tag,
+      # niet met de tagnaam. Staan die uit elkaar, dan verschijnt er domweg geen
+      # update en zegt niets waarom. Falen bij het taggen is veel beter.
+      - name: Tag en Version-header moeten overeenkomen
+        run: |
+          header="$(grep -m1 -E '^\s*\*\s*Version:' mcp-abilities-kadence.php | sed -E 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$header" != "$tag" ]; then
+            echo "::error::De plugin-header zegt Version: ${header}, maar de tag is ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          echo "Versie ${header} komt overeen met ${GITHUB_REF_NAME}."
+
+      # Uitsluiten in plaats van insluiten, verankerd met een / zodat een map
+      # met dezelfde naam binnen vendor/ niet per ongeluk wordt weggeknipt.
+      - name: ZIP bouwen
+        run: |
+          mkdir -p dist/mcp-abilities-kadence
+          rsync -a ./ dist/mcp-abilities-kadence/ \
+            --exclude '.git' \
+            --exclude '/.github' \
+            --exclude '/dist' \
+            --exclude '/.gitignore' \
+            --exclude '/.gitattributes'
+          cd dist && zip -qr mcp-abilities-kadence.zip mcp-abilities-kadence
+          unzip -l mcp-abilities-kadence.zip | tail -5
+
+      - name: Aan de release hangen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/mcp-abilities-kadence.zip \
+            --title "$GITHUB_REF_NAME" --generate-notes \
+          || gh release upload "$GITHUB_REF_NAME" dist/mcp-abilities-kadence.zip --clobber

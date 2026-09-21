@@ -1,0 +1,9 @@
+.DS_Store
+Thumbs.db
+*.log
+/dist
+/node_modules
+
+# vendor/ wordt hier NIET genegeerd: vendor/plugin-update-checker/ is vendored
+# code die mee moet in de release-ZIP. Zonder die bestanden registreert de
+# updater zich niet en verschijnt er nooit een update, zonder foutmelding.
