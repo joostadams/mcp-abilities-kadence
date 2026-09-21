@@ -3,7 +3,7 @@
  * Plugin Name:       MCP Abilities — Kadence
  * Plugin URI:        https://github.com/joostadams/mcp-abilities-kadence
  * Description:       Geeft een MCP-agent toegang tot Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema, via de WordPress Abilities API. Achttien leestools en zeventien schrijftools; alles staat standaard uit, en schrijven vraagt bovendien een eigen capability die niemand automatisch krijgt.
- * Version:           1.18.0
+ * Version:           1.19.0
  * Requires at least: 6.8
  * Requires PHP:      7.4
  * Author:            Joost Adams
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'KADENCE_MCP_VERSION', '1.18.0' );
+define( 'KADENCE_MCP_VERSION', '1.19.0' );
 define( 'KADENCE_MCP_FILE', __FILE__ );
 define( 'KADENCE_MCP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'KADENCE_MCP_BASENAME', plugin_basename( __FILE__ ) );

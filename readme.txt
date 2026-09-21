@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.18.0
+Stable tag: 1.19.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,12 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.19.0 =
+* De plugin werkt zichzelf bij vanaf GitHub, via plugin-update-checker. De repo is publiek, dus er is geen token nodig; de release-workflow bouwt een ZIP zodat de automatisch gegenereerde zipball van de tag — die ook .github/ bevat — nooit op een site belandt.
+* De documentatie klopte niet meer met de code. Vier plekken beschreven nog zes schrijvers terwijl het er zeventien zijn, waaronder de serverbeschrijving die elke MCP-client bij elke sessie inlaadt: een agent begon dus met de overtuiging dat schrijven een uitzondering was. Dat is precies de fout die in 1.8.0 al eens is rechtgezet voor de plugin-header en README, en hij was teruggeslopen op de plek waar hij het meest kost.
+* CONTEXT.md beweerde dat schrijvers alleen post_content aanraken en dat opties nergens geraakt worden. Sinds set-global-typography en set-site-css is dat onjuist. Er staat nu een onderscheid naar wat er terug te draaien valt: post content krijgt een revisie, post meta niet, en site-brede instellingen raken elke pagina.
+* Verwijzingen naar een specifieke klantsite zijn uit de codecommentaren gehaald. De herkomstnotities blijven — afgelezen van echte markup is de reden dat de blokprofielen kloppen — maar zonder wie het was.
 
 = 1.18.0 =
 * style-blocks en set-text kennen nu expect_modified als alternatief voor het token. Het token deed twee dingen: een mens de wijziging laten zien, en voorkomen dat je schrijft op een versie die er niet meer is. Bij deze twee schrijvers is dat eerste zwak — er is een schema, elke waarde is al getoetst — terwijl de kosten hoog zijn: op 14-09-2026 kostte het gelijktrekken van 31 hero-koppen 62 aanroepen in plaats van 31. expect_modified houdt de bescherming tegen verouderd schrijven volledig overeind en doet het in één aanroep. Bewust NIET bij remove-blocks, replace-block, insert-blocks en create-page: die veranderen de structuur, en daar valt uit geen schema af te lezen of het de bedoeling was.
