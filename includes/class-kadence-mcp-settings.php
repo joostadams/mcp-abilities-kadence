@@ -307,7 +307,7 @@ class Kadence_MCP_Settings {
 			<h1><?php esc_html_e( 'Kadence MCP', 'mcp-abilities-kadence' ); ?></h1>
 
 			<p style="max-width:46em">
-				<?php esc_html_e( 'Geeft een AI-assistent toegang tot Kadence via MCP: achttien leestools en zeventien schrijftools. Alles staat standaard uit; je zet per tool aan wat je wil aanbieden. Schrijven vraagt daarnaast de capability kadence_mcp_write, die bij installatie aan niemand wordt toegekend.', 'mcp-abilities-kadence' ); ?>
+				<?php esc_html_e( 'Geeft een AI-assistent toegang tot Kadence via MCP: negentien leestools en zeventien schrijftools. Alles staat standaard uit; je zet per tool aan wat je wil aanbieden. Schrijven vraagt daarnaast de capability kadence_mcp_write, die bij installatie aan niemand wordt toegekend.', 'mcp-abilities-kadence' ); ?>
 			</p>
 
 			<?php if ( ! $beschikbaar ) : ?>

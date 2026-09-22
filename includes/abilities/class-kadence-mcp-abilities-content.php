@@ -1536,8 +1536,23 @@ class Kadence_MCP_Abilities_Content {
 		if ( Kadence_MCP_Profielen::raakt_markup( $bloknaam, $attr ) ) {
 			$regel['notes'][] = sprintf(
 				/* translators: %s: attribute name. */
-				__( 'uit "%s" worden klassen in de markup afgeleid, en die worden hier NIET bijgewerkt — alleen het attribuut. Controleer na het schrijven of het resultaat klopt; bij twijfel bouwt replace-block het blok opnieuw op.', 'mcp-abilities-kadence' ),
+				__( 'uit "%s" wordt markup afgeleid (klassen of een heel element), en die wordt hier NIET bijgewerkt — alleen het attribuut. Controleer na het schrijven of het resultaat klopt; bij twijfel bouwt replace-block het blok opnieuw op, of wijzig het in de editor.', 'mcp-abilities-kadence' ),
 				$attr
+			);
+		}
+
+		// 3. Een attribuut dat wel in het schema staat, maar dat de render van
+		//    Kadence niet gebruikt. Schrijven slaagt en verandert niets; dat is
+		//    precies het soort groen licht dat misleidt. Geen blokkade, want
+		//    een eigen filter kan het attribuut bewust uitlezen.
+		$genegeerd = Kadence_MCP_Profielen::genegeerd( $bloknaam, $attr );
+
+		if ( '' !== $genegeerd ) {
+			$regel['notes'][] = sprintf(
+				/* translators: 1: attribute name, 2: explanation. */
+				__( '"%1$s" wordt door de render van Kadence genegeerd: %2$s', 'mcp-abilities-kadence' ),
+				$attr,
+				$genegeerd
 			);
 		}
 

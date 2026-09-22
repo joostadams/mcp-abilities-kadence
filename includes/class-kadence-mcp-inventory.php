@@ -458,7 +458,7 @@ class Kadence_MCP_Inventory {
 	 *
 	 * @return array
 	 */
-	public static function vat_attribuut_samen( $naam, $definitie ) {
+	public static function vat_attribuut_samen( $naam, $definitie, $bloknaam = '' ) {
 		$type = isset( $definitie['type'] ) ? $definitie['type'] : '';
 
 		$samenvatting = array(
@@ -466,8 +466,24 @@ class Kadence_MCP_Inventory {
 			'type' => is_array( $type ) ? implode( '|', $type ) : (string) $type,
 		);
 
+		$bekend = '' === $bloknaam ? null : Kadence_MCP_Profielen::waardenlijst( $bloknaam, $naam );
+
+		if ( '' !== $bloknaam ) {
+			$genegeerd = Kadence_MCP_Profielen::genegeerd( $bloknaam, $naam );
+
+			if ( '' !== $genegeerd ) {
+				$samenvatting['ignored_by_render'] = true;
+				$samenvatting['ignored_note']      = $genegeerd;
+			}
+		}
+
 		if ( isset( $definitie['enum'] ) && is_array( $definitie['enum'] ) ) {
 			$samenvatting['enum'] = array_slice( $definitie['enum'], 0, 20 );
+		} elseif ( null !== $bekend ) {
+			// Geen enum in block.json, maar de plug-in kent de waarden wel,
+			// afgelezen uit Kadence zelf. validate-write toetst hierop.
+			$samenvatting['known_values'] = $bekend;
+			$samenvatting['note']         = __( 'geen enum in het schema; deze waarden zijn afgelezen uit de editor en de render van Kadence, en validate-write toetst erop.', 'mcp-abilities-kadence' );
 		} elseif ( 'string' === $samenvatting['type'] ) {
 			// Een kale string zonder enum is een blinde vlek, en zwijgen daarover
 			// leest als goedkeuring. Kadence legt de toegestane waarden van zulke

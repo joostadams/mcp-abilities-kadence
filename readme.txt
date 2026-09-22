@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.20.2
+Stable tag: 1.21.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,12 +12,12 @@ Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema uitlezen en
 
 == Description ==
 
-Vijfendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
+Zesendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
 de Kadence-opbouw van een site kan uitlezen en gericht kan wijzigen: welke
 blokken er zijn, welke attributen die hebben, hoe een pagina is opgebouwd,
 welke headers en elementen er staan, en welk kleurenpalet er geldt.
 
-Achttien daarvan zijn alleen-lezen. Zeventien schrijven: set-attributes,
+Negentien daarvan zijn alleen-lezen. Zeventien schrijven: set-attributes,
 style-blocks, set-text, insert-blocks, remove-blocks, duplicate-blocks,
 replace-block, create-page, set-page-status, create-query, create-query-card,
 set-query, sync-query-facets, set-card-layout, set-entity-meta,
@@ -38,6 +38,15 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.21.0 =
+* Nieuw: kadence/prepare-import. insert-blocks nam alleen markup uit generate-section, dus markup die de editor zelf schreef — tabs, een slider, alles wat de generator niet kent — of markup van een andere omgeving kon er niet in, terwijl juist die het meest te vertrouwen is. prepare-import schrijft niets: hij controleert (alleen blokken, bestaande bloktypes, rondgang, klassen tegen attributen, schema en waardenlijsten, tellers als slideCount tegen het aantal kindblokken), geeft elke uniqueID het prefix van de doelpost, en meldt wat per site verschilt: links naar een ander domein, media, custom SVG-iconen, termen, paletkleuren met hun waarde op de doelsite, en eigen CSS-klassen. Omzetten alleen expliciet, met replace, media_map en term_map; er wordt niets geraden. Veilig geeft een token voor insert-blocks; een verwijzing die niet bestaat geeft geen token zonder accept_warnings.
+* Kennen en bouwen zijn gescheiden. Een blokprofiel kan nu bouwbaar false zijn: de plug-in kent dan de waarden en de afgeleide markup, maar de generator bouwt het niet. kadence/tabs staat er zo in — de wrapper en de titellijst volgen uit attributen op een manier die niet genoeg is waargenomen om te genereren.
+* Nieuwe profielen: kadence/slider en kadence/slide (Advanced Slider) zijn te bouwen en te toetsen, afgelezen uit de save() van Blocks Pro 2.8.19 en nagemeten in de editor: alle gegenereerde slides zijn daar geldig. kadence/postgrid is zelfsluitend en kent zijn layoutwaarden.
+* Afgeleide markup die niet op het buitenste element zit, wordt nu ook getoetst: de uitlijning van een slide staat op de tweede div, en de overlay is een eigen element dat alleen bestaat als er een overlaykleur is. Wie via een attribuut alleen backgroundOverlay zet, krijgt de kleur maar niet de div.
+* Waardenlijsten aangevuld: verticalAlignment op een Sectie kent ook space-between, space-around en space-evenly (die werden ten onrechte geblokkeerd), hAlign en vAlign op een knoppenrij, inheritStyles op een knop, en de slider-opties sliderType, loopType, arrowPosition, arrowStyle, dotStyle en heightType. describe-block toont zulke lijsten nu als known_values in plaats van "verzin hier geen waarde".
+* Attributen die de render negeert worden gemeld, in validate-write en describe-block: slidesScroll op de slider (de render schrijft altijd 1) en className op Geavanceerde tekst.
+* De generator vult tellers als slideCount zelf in, en neemt kbVersion over uit het profiel waar de editor iets anders dan 2 schrijft (de slider krijgt 3).
 
 = 1.20.2 =
 * Het instellingenscherm zegt nu waar de MCP Adapter vandaan komt. "Ontbreekt" was een doodlopend spoor: de adapter staat niet in de plugin-directory, dus zoeken onder Plugins > Nieuwe plugin levert niets op, en van de twee downloads op GitHub werkt alleen het bestand onder Assets — de broncode mist vendor/ en daarmee de autoloader. Ontbreekt de Abilities API, dan noemt het scherm de WordPress-versie van deze site erbij, want vanaf 6.9 zit die in core.

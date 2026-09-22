@@ -1,6 +1,6 @@
 ---
 name: kadence-blocks
-description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kadence-site via de Kadence MCP-server (kadence/list-blocks, describe-block, inspect-post, diff-blocks, list-entities, find-post, get-global-styles, validate-write, preview-write, set-attributes, set-text, duplicate-blocks). Laad dit vóór je een vraag beantwoordt over hoe een Kadence-pagina is opgebouwd, waarom twee blokken er anders uitzien, wat er moet veranderen voor mobiel, of voordat je iets schrijft."
+description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kadence-site via de Kadence MCP-server (kadence/list-blocks, describe-block, inspect-post, diff-blocks, list-entities, find-post, get-global-styles, validate-write, preview-write, set-attributes, set-text, duplicate-blocks, prepare-import). Laad dit vóór je een vraag beantwoordt over hoe een Kadence-pagina is opgebouwd, waarom twee blokken er anders uitzien, wat er moet veranderen voor mobiel, of voordat je iets schrijft."
 ---
 
 # Kadence uitlezen via MCP
@@ -8,7 +8,7 @@ description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kaden
 Deze skill beschrijft hoe je de Kadence MCP-server gebruikt zonder de fouten te
 maken die de toolschema's niet kunnen voorkomen.
 
-De server telt vijfendertig abilities: achttien lezen, zeventien schrijven.
+De server telt zesendertig abilities: negentien lezen, zeventien schrijven.
 **Schrijven is dus geen uitzondering** — controleer per tool of hij schrijft, in
 plaats van ervan uit te gaan dat lezen de norm is.
 
@@ -618,7 +618,181 @@ waarneming is, wordt niet gegenereerd.
 
 Praktisch: staat er al een accordeon, tabs, een countdown of een videopopup op
 de site, kopieer die dan met `duplicate-blocks` en pas hem daarna aan met
-`set-attributes`. Staat er niets, dan is de editor sneller dan jij.
+`set-attributes`. Staat er niets, bouw het dan in de editor (zie *Via de editor
+bouwen*) of voer editor-markup in met `prepare-import`.
+
+**Kennen is niet bouwen.** Een blokprofiel kan `bouwbaar: false` zijn: de
+plug-in kent dan de waardenlijsten, de afgeleide markup en de controles, maar de
+generator bouwt het niet. Tabs staan er zo in. `describe-block` en
+`validate-write` weten dus wel wat een geldige tabs-waarde is, en
+`prepare-import` toetst het aantal tabs, maar `generate-section` weigert.
+
+De Advanced Slider (`kadence/slider` met `kadence/slide`) is wél te bouwen: zijn
+`save()` is volledig afgelezen, en gegenereerde slides zijn in de editor geldig
+gemeten.
+
+## Markup van elders: `prepare-import`
+
+`insert-blocks` neemt alleen markup met een token. Dat token komt uit
+`generate-section` — of uit `prepare-import`, voor markup die de plug-in niet
+zelf bouwde: geserialiseerd in de editor, uitgelezen met `get-raw-markup` op een
+andere omgeving, of uit een patroon. `prepare-import` schrijft niets.
+
+Wat hij doet, in volgorde:
+
+1. alleen blokken — losse HTML wordt in de editor een Klassiek blok
+2. elk bloktype moet op déze site bestaan
+3. de markup moet een parse-serialiseerronde overleven
+4. elke uniqueID krijgt het prefix van de doelpost, in attribuut én klassen
+5. klassen tegen attributen, voor elk blok met een profiel — zoals `verify-markup`
+6. schema en waardenlijsten, zoals `validate-write`
+7. tellers als `slideCount` en `tabCount` tegen het aantal kindblokken
+8. verwijzingen: links naar een ander domein, media, custom SVG-iconen
+   (`kb-custom-N`), termen, paletkleuren met hun waarde op de doelsite, en eigen
+   CSS-klassen
+
+Oordelen: **veilig** geeft een token; **blokkeer** niet; **riskant** — een
+verwijzing die op de doelsite niet bestaat — alleen met `accept_warnings`, en
+dat beslist een mens.
+
+Omzetten gaat alleen expliciet, er wordt niets geraden:
+
+| wat | hoe |
+|---|---|
+| domein, icoon, klasse | `replace`: `[{"from":"https://oud","to":"https://nieuw"}]` |
+| media-ID | `media_map`: `{"111": 87}` — de url wordt die van het nieuwe bestand |
+| term-ID | `term_map`: `{"3": 12}` — het label wordt de naam van de nieuwe term |
+
+Media- en term-ID's zijn getallen; `replace` werkt alleen op tekst en kan ze
+dus niet omzetten. En vervang nooit een los getal met `replace` — "112" komt
+ook in afmetingen voor.
+
+Wat buiten de markup valt komt niet mee: de CSS van het thema, filters in
+`functions.php`, het palet, de contentbreedte. Het rapport noemt de eigen
+CSS-klassen en de paletwaarden juist daarom.
+
+**Na het invoegen: open de post één keer in de editor.** Of Kadence de blokken
+geldig vindt kan alleen de JavaScript van het blok zeggen; de server kan dat
+niet toetsen.
+
+Werkwijze van de ene omgeving naar de andere: `get-raw-markup` op de bron →
+`prepare-import` op het doel, met `replace`/`media_map` → `insert-blocks` met
+het token → editor openen en `isValid` nalopen.
+
+## Via de editor bouwen (`wp.data`)
+
+Voor wat de generator niet mag bouwen, of voor een wijziging die de opgeslagen
+markup verandert, kun je de editor zelf laten werken: Playwright in de
+blokeditor, en daar `wp.data` — de gegevenslaag van de editor. `createBlock`,
+`replaceBlock` en `updateBlockAttributes` op `core/block-editor`; `editPost` en
+`savePost` op `core/editor`. De `save()` van elk blok draait dan mee, dus de
+markup is per definitie die van Kadence.
+
+Het recept dat werkt:
+
+1. blokken maken of wijzigen
+2. elk nieuw blok één keer `selectBlock()`-en en wachten tot het een
+   `uniqueID` heeft — Kadence zet die pas als het blok gerenderd is, en als
+   niet-persistente wijziging
+3. `editPost({ content: wp.blocks.serialize( getBlocks() ) })` — zonder deze stap
+   schrijft `savePost()` de oude inhoud weg, zonder de uniqueIDs (`…-idnotset`)
+4. `savePost()`
+5. nalezen met `inspect-post` vanuit de database, niet in de editor
+
+Waarom dit niet de standaard is: er is **geen vangnet**. Geen toets op waarden,
+geen token, geen teruglees-vergelijking; en `savePost()` schrijft de héle post,
+inclusief wat de editor bij het openen zelf aanpaste en wat een ander intussen
+wijzigde. Het vraagt ook een ingelogde browser. Gebruik het dus alleen waar de
+MCP het niet kan, en lees daarna na met de MCP.
+
+| | MCP | `wp.data` |
+|---|---|---|
+| lezen, meten, controleren | ✓ | |
+| attributen die alleen in het blokcommentaar staan | ✓ | |
+| blokken die de generator niet mag bouwen (tabs) | | ✓ — of `prepare-import` |
+| attributen waar markup uit volgt | `replace-block` als het profiel het kent | ✓ |
+
+Twee dingen die je tegenkomt:
+
+- **Een "pagina verlaten?"-melding** bij navigeren blokkeert een script dat nog
+  draait. Controleer daarna in de database of het opslaan gelukt is.
+- **Een post die net geopend is heet al "gewijzigd"** als er blokken in staan
+  die de editor nooit zelf heeft opgeslagen. Kadence migreert dan attributen bij
+  het laden — gemeten bij Geavanceerde tekst: `markBorder` → `markBorderStyles`.
+  Onschuldig; één keer opslaan in de editor en het is weg.
+
+## Carrousel: Advanced Slider of Post Grid
+
+| | Advanced Slider | Post Grid (layout carousel) |
+|---|---|---|
+| inhoud | vast, per slide | dynamisch uit een posttype |
+| niet rondlopen | `loopType: none`, native | loopt áltijd rond; alleen met een `render_block`-filter dat `data-slider-loop-type` zet |
+| per pagina schuiven | attribuut `slidesScroll` wordt door de render genegeerd — filter dat `data-slider-scroll` op een getal ≠ 1 zet | `slidesScroll: all`, native |
+| eigen kaartopbouw | ja, elke slide is een container | alleen via de hooks `kadence_blocks_post_loop_*` |
+| foto achter de kaart | `backgroundImg` + overlay op de slide | niet native |
+
+Details bij de slider die tijd kosten:
+
+- De padding van de slider zit op `.kb-advanced-slide-inner-wrap` (standaard
+  20/48). Een padding van 0 geldt op de voorkant; de editor negeert hem en toont
+  de standaard.
+- `arrowPosition: outside-top-right` zet de pijlen boven de slides;
+  `arrowMargin` is een object per breakpoint (`[{desk:[…],tablet:[…],mobile:[…]}]`).
+- De overlay is absoluut met `inset: 0`, maar de wrap is niet gepositioneerd —
+  hij rekent vanaf de `li` en valt over een rand op de wrap heen. Eén regel CSS:
+  `position: relative` op de wrap.
+- De overlay-div bestaat alleen als er een overlaykleur is, en `align` zet een
+  klasse op de wrap. Beide staan in de opgeslagen markup: wijzigen via
+  `replace-block` of de editor, niet alleen als attribuut.
+- Een slider in een tab start pas als de tab zichtbaar wordt, en logt eenmalig
+  `[splide] Already mounted!` — onschuldig.
+- Kadence vult het `aria-label` van slides niet in: er staat letterlijk
+  `%1$s of %2$s`. Geldt ook voor de Post Grid-carousel.
+
+## Een knop die meer moet dan Kadence kan
+
+Zet in het blok wat het blok kan — tekst, icoon, typografie, kleuren, padding,
+radius, marge — en in CSS alleen de rest, met een eigen klasse op de knop
+(`singlebtn` zet `className` wél op het element). Wat je daarbij tegenkomt:
+
+- Het icoon heeft **geen eigen achtergrond**. Een icoon in een eigen vlak naast
+  het label is CSS.
+- Kadence geeft de knop `overflow: hidden`. Iets buiten de knop tekenen vraagt
+  `overflow: visible`.
+- De knop heeft een `::before` (absoluut, z-index -1, opacity 0) die alleen bij
+  `backgroundHoverType: gradient` een kleur krijgt. **In de editor** krijgt hij
+  via `.kt-button.kb-btn-global-fill::before` de hoverkleur van de themaknop en
+  fadet hij in op hover. Gebruik je hem niet, zet hem dan uit
+  (`content: none`), anders zie je in de editor een vreemde kleur.
+- **Twee lagen van dezelfde afgeronde vorm** — een achtergrond met een bovenlaag,
+  ook een achtergrondkleur met een verloop erover in één element — geven op de
+  hoeken een randje van de onderste kleur. Eén verloop per vlak lost het op.
+- Kadence' knop-CSS is (0,3,0) en laadt na de stylesheet van het thema. Een
+  eigen regel moet (0,4,0) zijn.
+- Kadence wisselt de icoonkleur op `:hover` én `:focus`; laat een eigen
+  hovereffect op dezelfde twee reageren, anders loopt het na een klik uit de pas.
+- `inheritStyles: inherit` neemt de knopstijl van het thema over. Voor een eigen
+  knop: laten staan op `fill`.
+
+## Editor en voorkant zijn twee verschillende DOM's
+
+- **Andere klassen.** De knop is in de editor `.kt-button` in
+  `.kb-btns-outer-wrap`, met `.kt-btn-svg-icon` en `.kt-button-text`; op de
+  voorkant `.kb-button` in `.kb-buttons-wrap`, met `.kb-svg-icon-wrap` en
+  `.kt-btn-inner-text`. Schrijf CSS voor allebei met `:is()`; `:is()` neemt de
+  hoogste specificiteit van zijn lijst.
+- **Iconen worden anders uitgelijnd.** De editor zet een niet-vierkante SVG
+  links in een vierkant van 1em (`xMinYMin`), de voorkant centreert hem. Een
+  breedte naar verhouding (`width: calc(1em * 20 / 24)`) trekt ze gelijk;
+  `width: auto` werkt op een inline SVG niet.
+- **Een server-render in de editor draait geen voorkant-JavaScript.** Een blok
+  dat in de editor via `ServerSideRender` getoond wordt, krijgt zijn
+  `viewScript` niet. Alles wat dat script berekent — een clip-path, een schaal —
+  moet daarom al in de markup kloppen, anders ziet de editor iets anders (en een
+  bezoeker zonder JavaScript ook).
+- **Een CSS-regel in een Post Grid-footer** (`.kt-blocks-post-footer svg { top:
+  .125em }`) schuift elke SVG daarin omlaag. Meet een knop op de plek waar hij
+  echt staat.
 
 ## Kleur zit in een klasse, niet alleen in een attribuut
 
@@ -734,6 +908,21 @@ meting zei dat er negentien pixels ruimte was.
    scrollt door de pagina en een `position: fixed` element schuift mee. Voor
    alles rond de header: viewport-screenshot op scrollpositie 0, of meten.
 
+Nog vier, uit het meten van beweging en hover:
+
+3. **Een geforceerde stand is geen hover.** Zet je een eindstand direct (een
+   custom property, een klasse), dan draaien de `:hover`-regels van Kadence
+   niet mee — en juist daar zat de fout. Meet ook met een echte muis-hover.
+4. **Parkeer de muis.** Na een scroll staat de muis ineens boven een ander
+   element, dat dan in hoverstand staat. Hover eerst iets neutraals.
+5. **Meet beweging per frame.** Een `requestAnimationFrame`-lus die de
+   waarde en de stand per frame opslaat laat zien wat een screenshot mist: een
+   fade die op een bug lijkt, een kleurwissel die een frame te laat komt.
+6. **Een randje zie je alleen in pixels.** Vergelijk hoekpixels van twee
+   screenshots; een verschil in de tekst van minder dan een pixel is ruis van
+   een fractionele positie, geen fout. Let op dat Playwright zijn eigen
+   inspectie-overlay in een screenshot kan zetten.
+
 De lus is dus: bouwen, meten tegen de Figma-waarden, corrigeren met
 `style-blocks`, opnieuw meten. Niet: bouwen, screenshot, turen.
 
@@ -830,10 +1019,14 @@ hoofdas verticaal, dus `verticalAlignment` gaat over de hoogte en blijft de
 breedte op `flex-start` staan — waardoor kinderen hun natuurlijke breedte
 krijgen in plaats van de volle.
 
-De toegestane waarden voor `verticalAlignment` zijn `top`, `middle`, `bottom` en
-`stretch`. Geen van beide attributen heeft een enum in `block.json`, dus
-`validate-write` laat elke tekst door; `describe-block` meldt dat met
-`values_not_validated`.
+De toegestane waarden voor `verticalAlignment` zijn `top`, `middle`, `bottom`,
+`stretch`, `space-between`, `space-around` en `space-evenly`. De werkbalk biedt
+de eerste vier; het paneel *Vertical Alignment* bij een verticale Sectie ook de
+laatste drie. `space-between` is de nette manier om een knop onderaan een
+kaart te krijgen: tekst bovenaan, knop onderaan, zonder `flexGrow` (dat werkt
+hier niet, want de binnenste laag is bij een verticale Sectie zonder
+uitlijning geen flexcontainer). `describe-block` toont de lijst als
+`known_values`, en `validate-write` toetst erop.
 
 **En let op wat hier NIET waar is.** Een Sectie draagt klassen als
 `kb-section-dir-horizontal` in zijn markup, en het ligt voor de hand te denken
@@ -845,8 +1038,9 @@ wijzigen op een bestaand blok.
 ## Grenzen
 
 - Zeventien abilities schrijven, alle met token of `expect_modified`. De
-  overige achttien zijn alleen-lezen. Ga niet af op de naam: `generate-section`
-  en `preview-write` klinken als schrijvers maar slaan niets op, terwijl
+  overige negentien zijn alleen-lezen. Ga niet af op de naam: `generate-section`,
+  `prepare-import` en `preview-write` klinken als schrijvers maar slaan niets
+  op, terwijl
   `sync-query-facets` en `set-card-layout` dat wél doen.
 - `inspect-post` kapt af op `max_blocks` (standaard 200, maximaal 400) en meldt
   dat in `truncated` en `status`.

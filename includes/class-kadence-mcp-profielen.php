@@ -44,6 +44,19 @@ if ( ! defined( 'ABSPATH' ) ) {
  *                   een bestaand blok, dan verandert alleen het commentaar en
  *                   niet de klasse. Daar hoort validate-write voor te
  *                   waarschuwen.
+ *   bouwbaar        false als de plug-in het blok KENT (waarden, afgeleide
+ *                   markup, controles) maar het niet mag bouwen. Standaard
+ *                   true. Kennen en bouwen zijn twee dingen: een blok waarvan
+ *                   je de waardenlijsten weet, weet je nog niet te schrijven.
+ *   genegeerd       Attribuut => waarom. Attributen die in het schema staan
+ *                   maar die de render van Kadence niet gebruikt. Schrijven
+ *                   slaagt, er verandert niets. Geen blokkade, wel een melding.
+ *   aantal_kinderen Attribuut dat gelijk moet zijn aan het aantal kindblokken,
+ *                   zoals columns op een rij. De generator vult hem in; de
+ *                   import toetst hem.
+ *   kbversion       De kbVersion die de editor bij dit blok schrijft, als die
+ *                   afwijkt van 2. kbVersion kiest de rendertak, dus een
+ *                   verkeerde waarde geeft een andere pagina zonder melding.
  */
 class Kadence_MCP_Profielen {
 
@@ -89,6 +102,33 @@ class Kadence_MCP_Profielen {
 			'soort'     => 'letterlijk',
 			'attribuut' => 'className',
 		),
+		// De uitlijning van een slide, op de TWEEDE div van de slide en niet
+		// op de buitenste. Kadence wisselt de klassen per breakpoint af:
+		// desktop-align, desktop-valign, tablet-align, tablet-valign, enz.
+		// Afgelezen uit de save() van kadence/slide (Blocks Pro 2.8.19).
+		'{SLIDE_UITLIJNING}' => array(
+			'soort'   => 'reeks',
+			'overal'  => true,
+			'reeks'   => array(
+				array( 'align', 0, 'kb-slide-align-' ),
+				array( 'vAlign', 0, 'kb-slide-valign-' ),
+				array( 'align', 1, 'kb-slide-tab-align-' ),
+				array( 'vAlign', 1, 'kb-slide-tab-valign-' ),
+				array( 'align', 2, 'kb-slide-mobile-align-' ),
+				array( 'vAlign', 2, 'kb-slide-mobile-valign-' ),
+			),
+		),
+		// Een heel element dat er alleen staat als een van deze attributen een
+		// waarde heeft. Bij de slide is dat de overlay: zet je via een
+		// attribuut alleen backgroundOverlay, dan krijgt het blok de kleur maar
+		// niet de div waar die kleur op hoort, en zie je niets.
+		'{SLIDE_OVERLAY}' => array(
+			'soort'      => 'element',
+			'overal'     => true,
+			'attributen' => array( 'backgroundOverlay', 'overlayGradient' ),
+			'klasse'     => 'kb-advanced-slide-overlay',
+			'html'       => '<div class="kb-advanced-slide-overlay"></div>',
+		),
 	);
 
 	/**
@@ -116,6 +156,11 @@ class Kadence_MCP_Profielen {
 			'overlayGradient',
 			'bgImg',
 			'background',
+		),
+		'kadence/slide' => array(
+			// ariaLabel gaat in save() als prop ariaLabel naar het li-element.
+			// Hoe dat in de opgeslagen HTML terechtkomt is niet waargenomen.
+			'ariaLabel',
 		),
 	);
 
@@ -169,8 +214,14 @@ class Kadence_MCP_Profielen {
 				'klassen' => array( '{ZICHTBAAR}', '{RICHTING}', '{KLEUR}', '{KLASSE}' ),
 				'markup_attrs' => array( 'direction', 'vsdesk', 'vstablet', 'vsmobile', 'sticky', 'className' ),
 				'waardenlijsten' => array(
-					// Afgelezen uit dist/blocks-column.js (3.7.8).
-					'verticalAlignment' => array( 'top', 'middle', 'bottom', 'stretch' ),
+					// Afgelezen uit dist/blocks-column.js (3.7.8). De werkbalk biedt
+					// top, middle, bottom en stretch; het paneel "Vertical
+					// Alignment" bij direction vertical biedt daarnaast
+					// space-between, space-around en space-evenly, en de render
+					// kent ze alle zeven (class-kadence-blocks-column-block.php).
+					// Tot 1.21.0 stonden alleen de eerste vier hier, en werd
+					// space-between ten onrechte geblokkeerd.
+					'verticalAlignment' => array( 'top', 'middle', 'bottom', 'stretch', 'space-between', 'space-around', 'space-evenly' ),
 					'direction'         => array( 'vertical', 'horizontal', 'vertical-reverse', 'horizontal-reverse' ),
 				),
 				'let_op' => 'Bij direction vertical stuurt verticalAlignment de HOOGTE (justify-content) en justifyContent de BREEDTE (align-items). Zie class-kadence-blocks-column-block.php:58 en 320.',
@@ -183,15 +234,38 @@ class Kadence_MCP_Profielen {
 				'sluit'   => '</{TAG}>',
 				'klassen' => array( '{KLEUR}' ),
 				'markup_attrs' => array( 'colorClass', 'backgroundColorClass' ),
+				'genegeerd'    => array(
+					'className' => 'Geavanceerde tekst zet zijn className niet in de HTML: het attribuut staat in het commentaar, maar de klasse komt niet op de h- of p-tag. Een CSS-regel die erop leunt pakt dus niet. Zet de opmaak in de blokattributen, of hang de klasse aan een omhullende Sectie.',
+				),
 				'let_op' => 'De tekst staat in de innerHTML, niet in een attribuut: het attribuut content heeft source html. Gebruik set-text.',
 			),
 
 			'kadence/advancedbtn' => array(
 				'open'  => '<div class="wp-block-kadence-advancedbtn kb-buttons-wrap kb-btns{ID}">',
 				'sluit' => '</div>',
+				'waardenlijsten' => array(
+					// Afgelezen uit class-kadence-blocks-advancedbtn-block.php
+					// (3.7.11), de switch per breakpoint. De t- en m-varianten
+					// zijn tablet en mobiel en kennen dezelfde waarden.
+					'hAlign'  => array( 'left', 'center', 'right', 'space-between' ),
+					'thAlign' => array( 'left', 'center', 'right', 'space-between' ),
+					'mhAlign' => array( 'left', 'center', 'right', 'space-between' ),
+					'vAlign'  => array( 'top', 'center', 'bottom' ),
+					'tvAlign' => array( 'top', 'center', 'bottom' ),
+					'mvAlign' => array( 'top', 'center', 'bottom' ),
+				),
 			),
 
-			'kadence/singlebtn' => array( 'zelfsluitend' => true ),
+			'kadence/singlebtn' => array(
+				'zelfsluitend'   => true,
+				'waardenlijsten' => array(
+					// Afgelezen uit dist/blocks-singlebtn.js en de render
+					// (3.7.11). inherit en inherit-secondary nemen de knopstijl
+					// van het THEMA over; fill is Kadence' eigen gevulde knop.
+					'inheritStyles' => array( 'fill', 'outline', 'inherit', 'inherit-secondary' ),
+				),
+				'let_op' => 'Het icoon heeft geen eigen achtergrond: iconColor en iconColorHover kleuren alleen het pictogram. Kadence geeft de knop overflow: hidden en een ::before-laag die bij backgroundHoverType gradient de hoverkleur draagt; in de editor krijgt die laag bij kb-btn-global-fill de hoverkleur van de themaknop. De editor bouwt de knop met andere klassen (.kt-button, .kt-btn-svg-icon, .kt-button-text) dan de voorkant (.kb-button, .kb-svg-icon-wrap, .kt-btn-inner-text).',
+			),
 
 			// Het pictogram. Afgelezen van kaart 251, 14-09-2026, nadat bleek
 			// dat een weggehaald icoon nergens meer vandaan te halen was: er
@@ -216,6 +290,70 @@ class Kadence_MCP_Profielen {
 				'open'  => '<div class="wp-block-kadence-single-icon kt-svg-style-default kt-svg-icon-wrap kt-svg-item-{ID}"><span data-name="{ATTR:icon}" data-stroke="{ATTR:width}" class="kadence-dynamic-icon">',
 				'sluit' => '</span></div>',
 				'let_op' => 'Hoort altijd in een kadence/icon. Het attribuut icon is een naam als fe_tag of fas_euro-sign; die namen verzin je niet maar lees je af van een bestaand blok. De span blijft leeg — Kadence zet daar bij het tonen de SVG in — maar de data-attributen erop moeten kloppen, want daar leest hij de naam en de lijndikte uit.',
+			),
+
+			// Post Grid (Blocks Pro). Zelfsluitend: de hele kaart wordt bij het
+			// tonen door PHP opgebouwd, er staat niets tussen de commentaren.
+			'kadence/postgrid' => array(
+				'zelfsluitend'   => true,
+				'waardenlijsten' => array(
+					// Afgelezen uit dist/blocks-postgrid.js (Pro 2.8.19): de
+					// editor biedt grid, masonry en carousel. fluidcarousel komt
+					// alleen nog in de render voor, voor oude inhoud.
+					'layout' => array( 'grid', 'masonry', 'carousel', 'fluidcarousel' ),
+				),
+				'let_op' => 'Een carousel loopt altijd rond: het script valt terug op loop als data-slider-loop-type ontbreekt, en de Post Grid zet dat nooit. Wil je dat niet, gebruik dan een Advanced Slider met loopType none. De kaart is niet vrij op te bouwen; afwijkende kaarten lopen via de hooks kadence_blocks_post_loop_*.',
+			),
+
+			// Advanced Slider (Blocks Pro). Draagt geen eigen markup: de slides
+			// staan rechtstreeks tussen de twee commentaren, net als bij een
+			// rij. Afgelezen van een slider die de editor schreef, 22-09-2026
+			// (Blocks Pro 2.8.19).
+			'kadence/slider' => array(
+				'open'            => '',
+				'sluit'           => '',
+				'kbversion'       => 3,
+				'aantal_kinderen' => 'slideCount',
+				'kinderen'        => array( 'kadence/slide' ),
+				'waardenlijsten'  => array(
+					// Alle afgelezen uit dist/blocks-slider.js.
+					'sliderType'    => array( 'slider', 'carousel' ),
+					'loopType'      => array( 'loop', 'rewind', 'none' ),
+					'arrowPosition' => array( 'center', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'outside-top', 'outside-top-left', 'outside-top-right', 'outside-bottom', 'outside-bottom-left', 'outside-bottom-right' ),
+					'arrowStyle'    => array( 'whiteondark', 'blackonlight', 'outlineblack', 'outlinewhite', 'custom', 'none' ),
+					'dotStyle'      => array( 'dark', 'light', 'outlinedark', 'outlinelight', 'none' ),
+					'heightType'    => array( 'ratio', 'fixed', 'inherit', '' ),
+				),
+				'genegeerd'       => array(
+					'slidesScroll' => 'Het attribuut staat in het schema, maar de render schrijft altijd data-slider-scroll="1" (Blocks Pro 2.8.19) en de editor heeft er geen keuzeveld voor. Het script schuift wél per pagina bij elk getal behalve 1 — per pagina schuiven vraagt dus een render_block-filter op kadence/slider dat dat data-attribuut zet.',
+				),
+				'let_op'          => 'loopType none = niet rondlopen, met een uitgeschakelde vorige-pijl op de eerste pagina. De padding van de slider staat op .kb-advanced-slide-inner-wrap (standaard 20/48); een padding van 0 geldt op de voorkant, maar de editor toont dan toch de standaard. slideCount moet gelijk zijn aan het aantal slides. In een Kadence-tab start Kadence de slider pas als de tab zichtbaar is, en logt dan eenmalig "[splide] Already mounted!" — onschuldig.',
+			),
+
+			// Eén slide. Afgelezen uit de save() van kadence/slide (Blocks Pro
+			// 2.8.19) en gecontroleerd tegen slides die de editor schreef. De
+			// uitlijning zit op de tweede div, de overlay is een eigen element
+			// dat alleen bestaat als er een overlaykleur of -verloop is.
+			'kadence/slide' => array(
+				'open'         => '<li class="wp-block-kadence-slide kb-advanced-slide-item kb-slide-{ID}{KLASSE}"><div class="kb-advanced-slide"><div class="kb-advanced-slide-inner-wrap{SLIDE_UITLIJNING}">{SLIDE_OVERLAY}<div class="kb-advanced-slide-inner">',
+				'sluit'        => '</div></div></div></li>',
+				'klassen'      => array( '{KLASSE}', '{SLIDE_UITLIJNING}', '{SLIDE_OVERLAY}' ),
+				'markup_attrs' => array( 'align', 'vAlign', 'backgroundOverlay', 'overlayGradient', 'className', 'ariaLabel' ),
+				'let_op'       => 'Hoort in een kadence/slider. De achtergrond (backgroundImg) staat op .kb-advanced-slide-inner-wrap; de overlay is absoluut met inset 0, maar de wrap is niet gepositioneerd, dus de overlay rekent vanaf de li en valt over een rand op de wrap heen. align en de overlay zitten in de opgeslagen markup: wijzig ze via replace-block of de editor, niet alleen als attribuut.',
+			),
+
+			// Tabs worden bewust NIET gebouwd. De wrapper draagt een reeks
+			// klassen die uit attributen volgen (kt-tabs-id, kt-tabs-has-N-tabs,
+			// kt-active-tab-N, layout per breakpoint), en de titellijst wordt
+			// uit het attribuut titles opgebouwd, met ankers die moeten
+			// meelopen met de kindblokken. Dat is niet waargenomen genoeg om te
+			// genereren. Wel bekend, zodat de import het aantal tabs kan toetsen.
+			// Bouw tabs in de editor of kopieer ze met duplicate-blocks.
+			'kadence/tabs' => array(
+				'bouwbaar'        => false,
+				'aantal_kinderen' => 'tabCount',
+				'kinderen'        => array( 'kadence/tab' ),
+				'let_op'          => 'Niet te bouwen met generate-section: de wrapper en de titellijst worden uit attributen afgeleid. Kopieer tabs met duplicate-blocks, bouw ze in de editor, of voer editor-markup in met prepare-import. gutter zet geen ruimte tussen de titels; innerPadding is de ruimte tussen de titelbalk en de inhoud.',
 			),
 
 			// De Query-blokken. Afgelezen van query 1456, 11-09-2026.
@@ -282,6 +420,11 @@ class Kadence_MCP_Profielen {
 				'waardenlijsten'  => array(),
 				'afhankelijk_van' => array(),
 				'let_op'          => '',
+				'bouwbaar'        => true,
+				'genegeerd'       => array(),
+				'aantal_kinderen' => '',
+				'kinderen'        => array(),
+				'kbversion'       => 0,
 			),
 			$alle[ $bloknaam ]
 		);
@@ -295,16 +438,79 @@ class Kadence_MCP_Profielen {
 	 * @return bool
 	 */
 	public static function bekend( $bloknaam ) {
+		$profiel = self::van( $bloknaam );
+
+		return null !== $profiel && false !== $profiel['bouwbaar'];
+	}
+
+	/**
+	 * Heeft de plug-in een profiel van dit bloktype, bouwbaar of niet?
+	 *
+	 * bekend() zegt of de generator het blok mag bouwen. Dit zegt alleen of er
+	 * iets over bekend is — waardenlijsten, afgeleide markup, controles.
+	 *
+	 * @param string $bloknaam De bloknaam.
+	 *
+	 * @return bool
+	 */
+	public static function heeft_profiel( $bloknaam ) {
 		return null !== self::van( $bloknaam );
 	}
 
 	/**
-	 * Alle bekende bloknamen.
+	 * De bloknamen die de generator kan bouwen.
 	 *
 	 * @return array
 	 */
 	public static function bloknamen() {
-		return array_keys( self::alle() );
+		$uit = array();
+
+		foreach ( array_keys( self::alle() ) as $naam ) {
+			if ( self::bekend( $naam ) ) {
+				$uit[] = $naam;
+			}
+		}
+
+		return $uit;
+	}
+
+	/**
+	 * Waarom de render dit attribuut negeert, of leeg.
+	 *
+	 * @param string $bloknaam  De bloknaam.
+	 * @param string $attribuut Het attribuut.
+	 *
+	 * @return string
+	 */
+	public static function genegeerd( $bloknaam, $attribuut ) {
+		$profiel = self::van( $bloknaam );
+
+		if ( null === $profiel || ! isset( $profiel['genegeerd'][ $attribuut ] ) ) {
+			return '';
+		}
+
+		return (string) $profiel['genegeerd'][ $attribuut ];
+	}
+
+	/**
+	 * De waarden die Kadence voor dit attribuut kent, of null.
+	 *
+	 * Alleen de platte lijsten; een lijst die van een ander attribuut afhangt
+	 * (colLayout per aantal kolommen) komt als geheel terug.
+	 *
+	 * @param string $bloknaam  De bloknaam.
+	 * @param string $attribuut Het attribuut.
+	 *
+	 * @return array|null
+	 */
+	public static function waardenlijst( $bloknaam, $attribuut ) {
+		$profiel = self::van( $bloknaam );
+
+		if ( null === $profiel || ! isset( $profiel['waardenlijsten'][ $attribuut ] ) ) {
+			return null;
+		}
+
+		return $profiel['waardenlijsten'][ $attribuut ];
 	}
 
 	/**
@@ -361,6 +567,31 @@ class Kadence_MCP_Profielen {
 				if ( '' !== $waarde ) {
 					$klassen[] = $waarde;
 				}
+			}
+
+			if ( 'reeks' === $regel['soort'] ) {
+				foreach ( $regel['reeks'] as $stap ) {
+					list( $attribuut, $index, $voorvoegsel ) = $stap;
+
+					if ( isset( $attrs[ $attribuut ] ) && is_array( $attrs[ $attribuut ] ) && isset( $attrs[ $attribuut ][ $index ] ) && '' !== (string) $attrs[ $attribuut ][ $index ] ) {
+						$klassen[] = $voorvoegsel . $attrs[ $attribuut ][ $index ];
+					}
+				}
+			}
+
+			if ( 'element' === $regel['soort'] ) {
+				$aanwezig = false;
+
+				foreach ( $regel['attributen'] as $attribuut ) {
+					if ( ! empty( $attrs[ $attribuut ] ) ) {
+						$aanwezig = true;
+					}
+				}
+
+				// Een element is geen klasse maar HTML; het komt zonder spatie
+				// ervoor in het sjabloon.
+				$uit[ $plaatshouder ] = $aanwezig ? $regel['html'] : '';
+				continue;
 			}
 
 			if ( 'richting' === $regel['soort'] ) {

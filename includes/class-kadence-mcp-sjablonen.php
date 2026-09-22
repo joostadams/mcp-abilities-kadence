@@ -389,6 +389,13 @@ class Kadence_MCP_Sjablonen {
 				}
 			}
 
+			// Hetzelfde voor elk ander blok dat zijn kinderen telt, zoals
+			// slideCount op een slider: een verkeerd getal geeft lege of
+			// ontbrekende slides, zonder melding.
+			if ( '' !== (string) $vorm['aantal_kinderen'] ) {
+				$attrs[ $vorm['aantal_kinderen'] ] = count( $knoop['kinderen'] );
+			}
+
 			$attrs = self::vul_kbversion_aan( $bloknaam, $attrs );
 
 			$genormaliseerd = Kadence_MCP_Inventory::normaliseer_attributen( $bloknaam, $attrs );
@@ -752,6 +759,10 @@ class Kadence_MCP_Sjablonen {
 			}
 		}
 
+		if ( '' !== (string) $vorm['aantal_kinderen'] ) {
+			$attrs[ $vorm['aantal_kinderen'] ] = count( $kinderen );
+		}
+
 		$attrs = self::vul_kbversion_aan( $bloknaam, $attrs );
 
 		$genormaliseerd = Kadence_MCP_Inventory::normaliseer_attributen( $bloknaam, $attrs );
@@ -853,7 +864,10 @@ class Kadence_MCP_Sjablonen {
 			return $attrs;
 		}
 
-		$attrs['kbVersion'] = 2;
+		// Wat de editor bij dit blok schrijft. Meestal 2, maar niet altijd: de
+		// Advanced Slider krijgt 3. Staat het in het profiel, dan geldt dat.
+		$profiel            = Kadence_MCP_Profielen::van( $bloknaam );
+		$attrs['kbVersion'] = ( null !== $profiel && ! empty( $profiel['kbversion'] ) ) ? (int) $profiel['kbversion'] : 2;
 
 		return $attrs;
 	}

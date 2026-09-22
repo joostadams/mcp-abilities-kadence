@@ -231,3 +231,36 @@ elkaar; deze plugin volgt dat patroon.
 `wp_add_inline_style` op `wp_enqueue_scripts` prioriteit 180. Er is geen
 bestandscache om leeg te maken. Komt er ooit schrijven bij, dan is dit het
 eerste dat opnieuw nagekeken moet worden.
+
+
+## Kennen en bouwen zijn twee dingen (1.21.0)
+
+Tot 1.21.0 betekende "er is een profiel" ook "de generator mag het bouwen".
+Daardoor kon je een blok niet deels kennen: wie de waardenlijsten van tabs
+wilde vastleggen, maakte tabs daarmee bouwbaar — met een wrapper die niet is
+waargenomen. `bouwbaar: false` scheidt die twee. `bekend()` zegt of er gebouwd
+mag worden, `heeft_profiel()` of er iets bekend is.
+
+Afgeleide markup zit niet altijd op het buitenste element. De slide zet zijn
+uitlijning op de tweede div en heeft een overlay-element dat alleen bestaat als
+er een overlaykleur is. Daarvoor zijn twee regelsoorten bij gekomen: `reeks`
+(klassen uit een array-attribuut, per breakpoint) en `element` (een stuk HTML
+dat er wel of niet staat). Regels met `overal` worden in de hele eigen
+innerHTML getoetst, niet alleen op het eerste class-attribuut.
+
+## Import zonder tweede schrijfroute (1.21.0)
+
+`prepare-import` is bewust een LEES-ability. Hij geeft hetzelfde token uit als
+`generate-section`, over zijn eigen opgeschoonde markup, en het schrijven
+blijft bij `insert-blocks` met al zijn controles. Een aparte import-schrijver
+zou een tweede plek zijn waar dezelfde grendels moeten kloppen.
+
+Verwijzingen worden gemeld en nooit geraden. Een media-ID op een andere site is
+een ander bestand; een term-ID ook. Omzetten gaat alleen met een kaart die de
+gebruiker opgeeft (`replace`, `media_map`, `term_map`). Een onopgeloste
+verwijzing geeft geen token zonder `accept_warnings`, omdat "het icoon bestaat
+hier niet" een beslissing is en geen detail.
+
+Wat de import niet kan: de geldigheid in de editor bewijzen. Die toets zit in de
+JavaScript van elk blok. De skill schrijft daarom voor de post na het invoegen
+in de editor te openen.

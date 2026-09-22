@@ -110,7 +110,7 @@ class Kadence_MCP_Abilities_Build {
 				'args' => array(
 					'label'       => __( 'Blokken invoegen in een post', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'SCHRIJFACTIE. Voegt gebouwde markup toe aan een post.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Voegt blokmarkup toe aan een bestaande post, op een plek die je zelf kiest. Vereist de capability kadence_mcp_write, bewerkrecht op de post, en het token uit generate-section — dat token is gebonden aan deze post, deze exacte markup en de wijzigingsdatum van de post, dus markup die je zelf hebt aangepast komt er niet in. Voor het opslaan wordt gecontroleerd dat elk uniqueID dat al in de post stond er daarna nog steeds is en dat er geen dubbele uniqueIDs ontstaan; klopt dat niet, dan wordt er niets geschreven. Na het opslaan wordt de post teruggelezen. Er wordt een revisie gemaakt, dus terugdraaien kan.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Voegt blokmarkup toe aan een bestaande post, op een plek die je zelf kiest. Vereist de capability kadence_mcp_write, bewerkrecht op de post, en het token uit generate-section of prepare-import — dat token is gebonden aan deze post, deze exacte markup en de wijzigingsdatum van de post, dus markup die je zelf hebt aangepast komt er niet in. Voor het opslaan wordt gecontroleerd dat elk uniqueID dat al in de post stond er daarna nog steeds is en dat er geen dubbele uniqueIDs ontstaan; klopt dat niet, dan wordt er niets geschreven. Na het opslaan wordt de post teruggelezen. Er wordt een revisie gemaakt, dus terugdraaien kan.', 'mcp-abilities-kadence' ),
 					'readonly'    => false,
 					'idempotent'  => false,
 					'input_schema' => array(
@@ -119,7 +119,7 @@ class Kadence_MCP_Abilities_Build {
 							'post_id' => array( 'type' => 'integer', 'minimum' => 1 ),
 							'markup'  => array(
 								'type'        => 'string',
-								'description' => __( 'De markup uit generate-section, letterlijk.', 'mcp-abilities-kadence' ),
+								'description' => __( 'De markup uit generate-section of prepare-import, letterlijk.', 'mcp-abilities-kadence' ),
 							),
 							'position' => array(
 								'type'        => 'string',
@@ -133,7 +133,7 @@ class Kadence_MCP_Abilities_Build {
 							),
 							'token' => array(
 								'type'        => 'string',
-								'description' => __( 'Het token uit generate-section.', 'mcp-abilities-kadence' ),
+								'description' => __( 'Het token uit generate-section of prepare-import.', 'mcp-abilities-kadence' ),
 							),
 						),
 						'required'             => array( 'post_id', 'markup', 'token' ),
@@ -298,6 +298,77 @@ class Kadence_MCP_Abilities_Build {
 						),
 					),
 					'execute_callback' => array( __CLASS__, 'verify_markup' ),
+				),
+			),
+			array(
+				'name' => 'kadence/prepare-import',
+				'args' => array(
+					'label'       => __( 'Markup van elders controleren voor invoegen', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'Controleert blokmarkup die niet uit deze plug-in komt — uit de editor of van een andere site — en geeft een token voor insert-blocks. Schrijft zelf niets.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Neemt blokmarkup aan die NIET door generate-section is gebouwd — geserialiseerd in de editor, uitgelezen met get-raw-markup op een andere site, of uit een patroon — en maakt hem klaar om met insert-blocks in deze post te zetten. Schrijft zelf niets. Wat er gebeurt, in volgorde: (1) alleen blokken, geen losse HTML, en elk bloktype moet op deze site bestaan; (2) de markup moet een parse- en serialiseerronde overleven; (3) elke uniqueID krijgt een nieuwe waarde met het postprefix van DEZE post, in het attribuut en in de klassen, en de kaart staat in id_map; (4) de klassen in de markup moeten kloppen met de attributen, voor elk bloktype waarvan het profiel bekend is — dezelfde toets als verify-markup; (5) elk attribuut gaat door de schematoets en de waardenlijsten van validate-write; (6) tellers als slideCount en tabCount moeten gelijk zijn aan het aantal kindblokken; (7) alles wat naar buiten wijst wordt gemeld: links naar een ander domein, afbeeldingen en media-ID\'s die hier niet bestaan, custom SVG-iconen (kb-custom-N), termen, paletkleuren met hun waarde op DEZE site, en de eigen CSS-klassen die de markup gebruikt. Omzetten gebeurt alleen met replace: een lijst van letterlijke vervangingen die jij opgeeft (een ander domein, een ander icoon-ID); er wordt niets geraden. Oordeel veilig geeft een token voor insert-blocks. Bij blokkeer komt er geen token. Bij riskant — een verwijzing die op deze site niet bestaat — alleen met accept_warnings true, en dat hoort een mens te beslissen. Wat deze toets NIET kan: bewijzen dat de editor het blok straks geldig vindt, want die toets bestaat alleen in de JavaScript van het blok. Open de post daarom na het invoegen één keer in de editor.', 'mcp-abilities-kadence' ),
+					'readonly'    => true,
+					'idempotent'  => false,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_id' => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => __( 'De post waar de markup in moet komen. Bepaalt het prefix van de nieuwe uniqueIDs.', 'mcp-abilities-kadence' ),
+							),
+							'markup' => array(
+								'type'        => 'string',
+								'description' => __( 'De blokmarkup zoals de editor of get-raw-markup hem geeft.', 'mcp-abilities-kadence' ),
+							),
+							'replace' => array(
+								'type'        => 'array',
+								'description' => __( 'Letterlijke vervangingen, in volgorde toegepast op alle tekst in attributen en markup. Voorbeeld: [{"from":"https://oud.example","to":"https://nieuw.example"},{"from":"kb-custom-112","to":"kb-custom-87"}]. Vervang geen getallen los — "112" komt ook in afmetingen voor.', 'mcp-abilities-kadence' ),
+								'items'       => array(
+									'type'       => 'object',
+									'properties' => array(
+										'from' => array( 'type' => 'string' ),
+										'to'   => array( 'type' => 'string' ),
+									),
+									'required'   => array( 'from', 'to' ),
+								),
+							),
+							'media_map' => array(
+								'type'                 => 'object',
+								'description'          => __( 'Media-ID\'s omzetten: {"111": 87}. Geldt voor elk beeld in de attributen dat een id met een url ernaast heeft (backgroundImg, image). De url wordt het bestand van het nieuwe ID. Media-ID\'s zijn getallen, dus replace kan ze niet omzetten.', 'mcp-abilities-kadence' ),
+								'additionalProperties' => array( 'type' => 'integer' ),
+							),
+							'term_map' => array(
+								'type'                 => 'object',
+								'description'          => __( 'Term-ID\'s omzetten: {"3": 12}. Geldt voor gekozen termen in de vorm [{value, label}], zoals het filter van een Post Grid; het label wordt de naam van de nieuwe term.', 'mcp-abilities-kadence' ),
+								'additionalProperties' => array( 'type' => 'integer' ),
+							),
+							'accept_warnings' => array(
+								'type'        => 'boolean',
+								'default'     => false,
+								'description' => __( 'Geef toch een token als er verwijzingen zijn die op deze site niet bestaan. Alleen na akkoord van een mens.', 'mcp-abilities-kadence' ),
+							),
+						),
+						'required'             => array( 'post_id', 'markup' ),
+						'additionalProperties' => false,
+					),
+					'output_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post'        => array( 'type' => 'object' ),
+							'verdict'     => array( 'type' => 'string' ),
+							'blocks'      => array( 'type' => 'object' ),
+							'problems'    => array( 'type' => 'array' ),
+							'warnings'    => array( 'type' => 'array' ),
+							'references'  => array( 'type' => 'object' ),
+							'not_checked' => array( 'type' => 'object' ),
+							'replaced'    => array( 'type' => 'array' ),
+							'id_map'      => array( 'type' => 'object' ),
+							'markup'      => array( 'type' => 'string' ),
+							'token'       => array( 'type' => 'string' ),
+							'status'      => array( 'type' => 'string' ),
+						),
+					),
+					'execute_callback' => array( __CLASS__, 'prepare_import' ),
 				),
 			),
 			array(
@@ -1517,13 +1588,42 @@ class Kadence_MCP_Abilities_Build {
 			return null;
 		}
 
-		$aanwezig = array_values( array_filter( explode( ' ', trim( $m[1] ) ) ) );
-		$afgeleid = Kadence_MCP_Profielen::klassen( $naam, $attrs );
+		$buitenste = array_values( array_filter( explode( ' ', trim( $m[1] ) ) ) );
+		$afgeleid  = Kadence_MCP_Profielen::klassen( $naam, $attrs );
+
+		// Alle klassen van het blok zelf, ook die op dieper gelegen elementen.
+		// innerHTML bevat alleen de eigen markup, niet die van de kinderen, dus
+		// dit blijft bij dit ene blok. Regels met 'overal' kijken hier.
+		preg_match_all( '/class="([^"]*)"/', $html, $alle_m );
+		$alle = array();
+
+		foreach ( $alle_m[1] as $lijst ) {
+			$alle = array_merge( $alle, array_values( array_filter( explode( ' ', trim( $lijst ) ) ) ) );
+		}
 
 		$mist     = array();
 		$overbodig = array();
 
 		foreach ( $afgeleid as $plaatshouder => $tekst ) {
+			$regel    = isset( Kadence_MCP_Profielen::KLASSENREGELS[ $plaatshouder ] ) ? Kadence_MCP_Profielen::KLASSENREGELS[ $plaatshouder ] : array();
+			$aanwezig = ! empty( $regel['overal'] ) ? $alle : $buitenste;
+
+			// Een element: zijn klasse moet er zijn als het sjabloon het
+			// voorschrijft, en weg als het dat niet doet.
+			if ( isset( $regel['soort'] ) && 'element' === $regel['soort'] ) {
+				$staat = in_array( $regel['klasse'], $aanwezig, true );
+
+				if ( '' !== (string) $tekst && ! $staat ) {
+					$mist[] = $regel['klasse'];
+				}
+
+				if ( '' === (string) $tekst && $staat ) {
+					$overbodig[] = $regel['klasse'];
+				}
+
+				continue;
+			}
+
 			$verwacht = array_values( array_filter( explode( ' ', trim( (string) $tekst ) ) ) );
 
 			// Wat het attribuut voorschrijft maar niet in de markup staat.
@@ -1536,14 +1636,27 @@ class Kadence_MCP_Abilities_Build {
 			// En andersom: een klasse van dezelfde soort die er wél staat maar
 			// niet meer voorgeschreven wordt. Dat is de achterblijver na een
 			// wijziging met set-attributes.
-			$regel = isset( Kadence_MCP_Profielen::KLASSENREGELS[ $plaatshouder ] ) ? Kadence_MCP_Profielen::KLASSENREGELS[ $plaatshouder ] : array();
+			$voorvoegsels = array();
 
 			if ( isset( $regel['soort'] ) && 'richting' === $regel['soort'] ) {
-				foreach ( $aanwezig as $klasse ) {
-					foreach ( $regel['voorvoegsels'] as $voorvoegsel ) {
-						if ( 0 === strpos( $klasse, $voorvoegsel ) && ! in_array( $klasse, $verwacht, true ) ) {
-							$overbodig[] = $klasse;
-						}
+				$voorvoegsels = $regel['voorvoegsels'];
+			}
+
+			if ( isset( $regel['soort'] ) && 'reeks' === $regel['soort'] ) {
+				foreach ( $regel['reeks'] as $stap ) {
+					$voorvoegsels[] = $stap[2];
+				}
+			}
+
+			foreach ( $aanwezig as $klasse ) {
+				foreach ( $voorvoegsels as $voorvoegsel ) {
+					// kb-slide-align- is ook het begin van niets anders, maar
+					// kb-slide-tab-align- begint NIET met kb-slide-align-. Toch
+					// het langste voorvoegsel eerst nemen is niet nodig: een
+					// klasse telt als achterblijver zodra hij bij een
+					// voorvoegsel hoort en niet verwacht wordt.
+					if ( 0 === strpos( $klasse, $voorvoegsel ) && ! in_array( $klasse, $verwacht, true ) ) {
+						$overbodig[] = $klasse;
 					}
 				}
 			}
@@ -1567,6 +1680,933 @@ class Kadence_MCP_Abilities_Build {
 					implode( ', ', $ongedekt )
 				),
 		);
+	}
+
+	/**
+	 * Markup van elders klaarmaken voor insert-blocks.
+	 *
+	 * insert-blocks neemt alleen markup met een token, en tot 1.21.0 kwam dat
+	 * token alleen uit generate-section. Markup die de editor zelf schreef —
+	 * tabs, een slider, alles wat de generator niet kent — of markup van een
+	 * andere site kon er dus niet in, terwijl juist die markup het meest te
+	 * vertrouwen is: Kadence heeft hem zelf geschreven.
+	 *
+	 * Deze ability sluit dat gat zonder een tweede schrijfroute te openen. Hij
+	 * schrijft niets; hij controleert, zet uniqueIDs om, meldt wat per site
+	 * verschilt, en geeft hetzelfde soort token uit als generate-section. Het
+	 * schrijven blijft bij insert-blocks, met al zijn controles.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function prepare_import( $input = array() ) {
+		$post = self::post( isset( $input['post_id'] ) ? $input['post_id'] : 0 );
+
+		if ( is_wp_error( $post ) ) {
+			return $post;
+		}
+
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+			return new WP_Error(
+				'kadence_mcp_edit_denied',
+				__( 'Je mag deze post volgens WordPress zelf niet bewerken, dus er valt niets in te voegen.', 'mcp-abilities-kadence' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		$invoer = isset( $input['markup'] ) ? (string) $input['markup'] : '';
+
+		if ( '' === trim( $invoer ) ) {
+			return new WP_Error( 'kadence_mcp_import_empty', __( 'Er is geen markup meegegeven.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( strlen( $invoer ) > self::IMPORT_MAX_TEKENS ) {
+			return new WP_Error(
+				'kadence_mcp_import_too_large',
+				sprintf(
+					/* translators: %d: maximum number of characters. */
+					__( 'De markup is groter dan %d tekens. Voer hem in delen in, per sectie.', 'mcp-abilities-kadence' ),
+					self::IMPORT_MAX_TEKENS
+				)
+			);
+		}
+
+		$problemen    = array();
+		$waarschuwingen = array();
+
+		// 1. Alleen blokken. Losse HTML op het hoogste niveau wordt door de
+		//    editor een Klassiek blok, en hoort niet ongemerkt mee te komen.
+		$geparsed = parse_blocks( $invoer );
+
+		foreach ( $geparsed as $knoop ) {
+			if ( empty( $knoop['blockName'] ) && '' !== trim( isset( $knoop['innerHTML'] ) ? (string) $knoop['innerHTML'] : '' ) ) {
+				$problemen[] = array(
+					'check'  => 'freeform',
+					'detail' => __( 'Er staat HTML buiten een blok. In de editor wordt dat een Klassiek blok. Geef alleen blokmarkup mee.', 'mcp-abilities-kadence' ),
+					'sample' => self::kort_fragment( (string) $knoop['innerHTML'] ),
+				);
+			}
+		}
+
+		$boom = Kadence_MCP_Inventory::schoon_blokken( $geparsed );
+
+		if ( empty( $boom ) ) {
+			return new WP_Error( 'kadence_mcp_import_no_blocks', __( 'De markup levert bij het parsen geen blokken op.', 'mcp-abilities-kadence' ) );
+		}
+
+		// 2. De rondgang. Wijkt de markup af van wat WordPress ervan maakt,
+		//    dan wordt hij bij het opslaan herschreven. Dat is geen blokkade —
+		//    we geven de herschreven vorm terug en daar gaat het token over —
+		//    maar het hoort gemeld: wat je zag is niet precies wat er komt.
+		$canoniek = Kadence_MCP_Inventory::serialiseer( $boom );
+
+		if ( trim( self::zonder_witregels( $canoniek ) ) !== trim( self::zonder_witregels( $invoer ) ) ) {
+			$waarschuwingen[] = array(
+				'check'  => 'roundtrip',
+				'detail' => __( 'WordPress schrijft deze markup iets anders weg dan hij binnenkwam (meestal alleen de codering van het blokcommentaar). Wat terugkomt in markup is de vorm die opgeslagen wordt.', 'mcp-abilities-kadence' ),
+			);
+		}
+
+		// 3. Vervangingen, in volgorde, op alle tekst. Letterlijk: er wordt
+		//    niets geraden.
+		$vervangingen = array();
+		$gemeld       = array();
+
+		if ( ! empty( $input['replace'] ) && is_array( $input['replace'] ) ) {
+			foreach ( $input['replace'] as $paar ) {
+				if ( ! is_array( $paar ) || ! isset( $paar['from'] ) || '' === (string) $paar['from'] ) {
+					continue;
+				}
+
+				$vervangingen[] = array( (string) $paar['from'], isset( $paar['to'] ) ? (string) $paar['to'] : '' );
+			}
+		}
+
+		foreach ( $vervangingen as $i => $paar ) {
+			$aantal = 0;
+			$boom   = self::vervang_in_boom( $boom, $paar[0], $paar[1], $aantal );
+
+			$gemeld[] = array( 'from' => $paar[0], 'to' => $paar[1], 'count' => $aantal );
+
+			if ( 0 === $aantal ) {
+				$waarschuwingen[] = array(
+					'check'  => 'replace_unused',
+					'detail' => sprintf(
+						/* translators: %s: search string. */
+						__( 'De vervanging van "%s" kwam nergens voor.', 'mcp-abilities-kadence' ),
+						$paar[0]
+					),
+				);
+			}
+		}
+
+		// 3b. Media- en term-ID's, alleen volgens een expliciete kaart.
+		$media_kaart = self::id_kaart( isset( $input['media_map'] ) ? $input['media_map'] : array() );
+		$term_kaart  = self::id_kaart( isset( $input['term_map'] ) ? $input['term_map'] : array() );
+
+		if ( ! empty( $media_kaart ) || ! empty( $term_kaart ) ) {
+			$omgezet = array( 'media' => 0, 'terms' => 0 );
+			$boom    = self::zet_ids_om( $boom, $media_kaart, $term_kaart, $omgezet );
+
+			$gemeld[] = array( 'from' => 'media_map', 'to' => '', 'count' => $omgezet['media'] );
+			$gemeld[] = array( 'from' => 'term_map', 'to' => '', 'count' => $omgezet['terms'] );
+		}
+
+		// 4. Nieuwe uniqueIDs met het prefix van DEZE post. Een ID dat in de
+		//    invoer twee keer voorkomt kan niet eenduidig worden omgezet: twee
+		//    blokken zouden weer hetzelfde ID krijgen en hun CSS delen.
+		$in_invoer = Kadence_MCP_Inventory::verzamel_unique_ids( $boom );
+
+		foreach ( $in_invoer as $id => $namen ) {
+			if ( count( $namen ) > 1 ) {
+				$problemen[] = array(
+					'check'  => 'duplicate_unique_id',
+					'detail' => sprintf(
+						/* translators: 1: uniqueID, 2: number of blocks. */
+						__( 'De uniqueID %1$s komt %2$d keer voor in de invoer. Twee blokken met hetzelfde ID delen hun CSS. Laat de editor het ene blok een nieuw ID geven en exporteer opnieuw.', 'mcp-abilities-kadence' ),
+						$id,
+						count( $namen )
+					),
+				);
+			}
+		}
+
+		$bezet = Kadence_MCP_Inventory::verzamel_unique_ids( parse_blocks( $post->post_content ) );
+		$kaart = array();
+
+		foreach ( array_keys( $in_invoer ) as $oud ) {
+			$nieuw = Kadence_MCP_Inventory::nieuwe_unique_id( $post->ID, $bezet );
+
+			if ( '' === $nieuw ) {
+				return new WP_Error( 'kadence_mcp_id_exhausted', __( 'Kon geen vrije uniqueID genereren.', 'mcp-abilities-kadence' ) );
+			}
+
+			$kaart[ $oud ]   = $nieuw;
+			$bezet[ $nieuw ] = array( 'gereserveerd' );
+		}
+
+		$boom = Kadence_MCP_Inventory::hernoem_unique_ids( $boom, $kaart );
+
+		// 5–7. De controles per blok.
+		$tellers     = array();
+		$ongetoetst  = array();
+		$verwijzingen = array(
+			'external_links' => array(),
+			'media'          => array(),
+			'icons'          => array(),
+			'terms'          => array(),
+			'palette'        => array(),
+			'css_classes'    => array(),
+		);
+
+		self::keur_import( $boom, $tellers, $ongetoetst, $problemen, $waarschuwingen, $verwijzingen );
+
+		foreach ( Kadence_MCP_Abilities_Build::klassen_controle( $boom ) as $bevinding ) {
+			$problemen[] = array(
+				'check'     => 'classes',
+				'block'     => $bevinding['block'],
+				'unique_id' => $bevinding['unique_id'],
+				'missing'   => $bevinding['missing'],
+				'stale'     => $bevinding['stale'],
+				'detail'    => __( 'De klassen in de markup passen niet bij de attributen. In de editor heet dat "ongeldige inhoud". Exporteer het blok opnieuw uit de editor.', 'mcp-abilities-kadence' ),
+			);
+		}
+
+		$verwijzingen = self::beoordeel_verwijzingen( $verwijzingen, $waarschuwingen );
+
+		$markup = Kadence_MCP_Inventory::serialiseer( $boom );
+
+		$heeft_probleem = ! empty( $problemen );
+		$riskant        = false;
+
+		foreach ( $waarschuwingen as $waarschuwing ) {
+			if ( ! empty( $waarschuwing['unresolved'] ) ) {
+				$riskant = true;
+			}
+		}
+
+		$accepteer = ! empty( $input['accept_warnings'] );
+
+		if ( $heeft_probleem ) {
+			$oordeel = 'blokkeer';
+		} elseif ( $riskant && ! $accepteer ) {
+			$oordeel = 'riskant';
+		} else {
+			$oordeel = 'veilig';
+		}
+
+		$token = 'veilig' === $oordeel
+			? Kadence_MCP_Inventory::schrijf_token( $post, '__insert__', array( 'markup' => Kadence_MCP_Inventory::token_markup( $markup ) ) )
+			: '';
+
+		if ( 'blokkeer' === $oordeel ) {
+			$status = sprintf(
+				/* translators: %d: number of problems. */
+				__( 'NIET invoegen: %d probleem/problemen, zie problems. Er is geen token.', 'mcp-abilities-kadence' ),
+				count( $problemen )
+			);
+		} elseif ( 'riskant' === $oordeel ) {
+			$status = __( 'Geen token: er zijn verwijzingen die op deze site niet bestaan, zie warnings met unresolved. Zet ze om met replace, of laat een mens beslissen en roep opnieuw aan met accept_warnings true.', 'mcp-abilities-kadence' );
+		} else {
+			$status = __( 'Gecontroleerd, er is NIETS opgeslagen. Geef markup en token letterlijk door aan insert-blocks (met position en relative_to naar keuze). Pas je de markup aan, dan vervalt het token. Open de post daarna één keer in de editor: of Kadence de blokken geldig vindt, kan alleen de editor zeggen.', 'mcp-abilities-kadence' );
+
+			if ( $riskant ) {
+				$status .= ' ' . __( 'Let op: er zijn onopgeloste verwijzingen, en die zijn met accept_warnings geaccepteerd.', 'mcp-abilities-kadence' );
+			}
+		}
+
+		return array(
+			'post'        => array( 'id' => $post->ID, 'title' => get_the_title( $post ), 'type' => $post->post_type ),
+			'verdict'     => $oordeel,
+			'blocks'      => (object) $tellers,
+			'problems'    => $problemen,
+			'warnings'    => $waarschuwingen,
+			'references'  => (object) $verwijzingen,
+			'not_checked' => (object) $ongetoetst,
+			'replaced'    => $gemeld,
+			'id_map'      => (object) $kaart,
+			'markup'      => $markup,
+			'token'       => $token,
+			'status'      => $status,
+		);
+	}
+
+	/**
+	 * De grootste markup die prepare-import aanneemt.
+	 *
+	 * Een homepage met twaalf secties is een paar honderdduizend tekens. Groter
+	 * is geen import meer maar een migratie, en daar hoort een ander gereedschap
+	 * bij.
+	 */
+	const IMPORT_MAX_TEKENS = 600000;
+
+	/**
+	 * Loop de boom na: bestaat elk blok, kloppen de waarden, kloppen de tellers,
+	 * en wat wijst er naar buiten.
+	 *
+	 * @param array $blokken        De boom.
+	 * @param array $tellers        Aantal per bloktype.
+	 * @param array $ongetoetst     Bloktypes zonder profiel, met aantal.
+	 * @param array $problemen      Verzameling.
+	 * @param array $waarschuwingen Verzameling.
+	 * @param array $verwijzingen   Verzameling.
+	 *
+	 * @return void
+	 */
+	private static function keur_import( $blokken, &$tellers, &$ongetoetst, &$problemen, &$waarschuwingen, &$verwijzingen ) {
+		foreach ( $blokken as $blok ) {
+			$naam  = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+			$attrs = isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ? $blok['attrs'] : array();
+			$id    = isset( $attrs['uniqueID'] ) ? (string) $attrs['uniqueID'] : '';
+
+			if ( '' === $naam ) {
+				continue;
+			}
+
+			$tellers[ $naam ] = isset( $tellers[ $naam ] ) ? $tellers[ $naam ] + 1 : 1;
+
+			// Bestaat het bloktype hier? Kadence registreert een paar
+			// kindblokken alleen in JavaScript; get_block kent die via hun
+			// block.json, dus die tellen als bestaand.
+			$geregistreerd = class_exists( 'WP_Block_Type_Registry' ) && WP_Block_Type_Registry::get_instance()->is_registered( $naam );
+
+			if ( ! $geregistreerd && is_wp_error( Kadence_MCP_Inventory::get_block( $naam ) ) ) {
+				$problemen[] = array(
+					'check'     => 'unknown_block',
+					'block'     => $naam,
+					'unique_id' => $id,
+					'detail'    => __( 'Dit bloktype bestaat op deze site niet — ontbreekt er een plug-in, of een andere versie ervan? In de editor wordt het een blok dat niet ondersteund wordt.', 'mcp-abilities-kadence' ),
+				);
+			}
+
+			$profiel = Kadence_MCP_Profielen::van( $naam );
+
+			if ( null === $profiel && 0 === strpos( $naam, 'kadence/' ) ) {
+				$ongetoetst[ $naam ] = isset( $ongetoetst[ $naam ] ) ? $ongetoetst[ $naam ] + 1 : 1;
+			}
+
+			// 5. Elk attribuut: schema en waardenlijst.
+			foreach ( $attrs as $sleutel => $waarde ) {
+				$definitie = Kadence_MCP_Inventory::attribuut_definitie( $naam, $sleutel );
+
+				if ( null !== $definitie ) {
+					$reden = Kadence_MCP_Inventory::toets_waarde( $definitie, $waarde );
+
+					if ( '' !== $reden ) {
+						$problemen[] = array(
+							'check'     => 'attribute_type',
+							'block'     => $naam,
+							'unique_id' => $id,
+							'attribute' => $sleutel,
+							'detail'    => $reden,
+						);
+					}
+				}
+
+				$bezwaar = Kadence_MCP_Profielen::toets_waarde( $naam, $sleutel, $waarde, $attrs );
+
+				if ( '' !== $bezwaar ) {
+					$problemen[] = array(
+						'check'     => 'attribute_value',
+						'block'     => $naam,
+						'unique_id' => $id,
+						'attribute' => $sleutel,
+						'detail'    => $bezwaar,
+					);
+				}
+
+				$genegeerd = Kadence_MCP_Profielen::genegeerd( $naam, $sleutel );
+
+				if ( '' !== $genegeerd ) {
+					$waarschuwingen[] = array(
+						'check'     => 'ignored_attribute',
+						'block'     => $naam,
+						'unique_id' => $id,
+						'attribute' => $sleutel,
+						'detail'    => $genegeerd,
+					);
+				}
+			}
+
+			// 6. Tellers en toegestane kinderen.
+			$kinderen = isset( $blok['innerBlocks'] ) && is_array( $blok['innerBlocks'] ) ? $blok['innerBlocks'] : array();
+
+			if ( null !== $profiel && '' !== (string) $profiel['aantal_kinderen'] ) {
+				$sleutel = $profiel['aantal_kinderen'];
+
+				if ( array_key_exists( $sleutel, $attrs ) ) {
+					$opgegeven = $attrs[ $sleutel ];
+				} else {
+					$definitie = Kadence_MCP_Inventory::attribuut_definitie( $naam, $sleutel );
+					$opgegeven = ( is_array( $definitie ) && array_key_exists( 'default', $definitie ) ) ? $definitie['default'] : null;
+				}
+
+				if ( null !== $opgegeven && (int) $opgegeven !== count( $kinderen ) ) {
+					$problemen[] = array(
+						'check'     => 'child_count',
+						'block'     => $naam,
+						'unique_id' => $id,
+						'attribute' => $sleutel,
+						'detail'    => sprintf(
+							/* translators: 1: attribute, 2: value, 3: number of child blocks. */
+							__( '%1$s staat op %2$d, maar er zijn %3$d kindblokken. Kadence rekent met het attribuut, dus er verschijnen lege of ontbrekende onderdelen.', 'mcp-abilities-kadence' ),
+							$sleutel,
+							(int) $opgegeven,
+							count( $kinderen )
+						),
+					);
+				}
+			}
+
+			if ( null !== $profiel && ! empty( $profiel['kinderen'] ) ) {
+				foreach ( $kinderen as $kind ) {
+					$kindnaam = isset( $kind['blockName'] ) ? (string) $kind['blockName'] : '';
+
+					if ( '' !== $kindnaam && ! in_array( $kindnaam, $profiel['kinderen'], true ) ) {
+						$problemen[] = array(
+							'check'     => 'child_type',
+							'block'     => $naam,
+							'unique_id' => $id,
+							'detail'    => sprintf(
+								/* translators: 1: child block, 2: allowed blocks. */
+								__( 'Kindblok %1$s hoort hier niet; toegestaan is %2$s.', 'mcp-abilities-kadence' ),
+								$kindnaam,
+								implode( ', ', $profiel['kinderen'] )
+							),
+						);
+					}
+				}
+			}
+
+			// 7. Wat naar buiten wijst.
+			self::verzamel_verwijzingen( $attrs, isset( $blok['innerHTML'] ) ? (string) $blok['innerHTML'] : '', $naam, $id, $verwijzingen );
+
+			if ( ! empty( $kinderen ) ) {
+				self::keur_import( $kinderen, $tellers, $ongetoetst, $problemen, $waarschuwingen, $verwijzingen );
+			}
+		}
+	}
+
+	/**
+	 * Verzamel links, media, iconen, termen, paletkleuren en CSS-klassen.
+	 *
+	 * @param array  $attrs        De attributen.
+	 * @param string $html         De eigen innerHTML van het blok.
+	 * @param string $naam         De bloknaam.
+	 * @param string $id           De uniqueID.
+	 * @param array  $verwijzingen Verzameling.
+	 *
+	 * @return void
+	 */
+	private static function verzamel_verwijzingen( $attrs, $html, $naam, $id, &$verwijzingen ) {
+		$teksten = array( $html );
+
+		array_walk_recursive(
+			$attrs,
+			static function ( $waarde ) use ( &$teksten ) {
+				if ( is_string( $waarde ) ) {
+					$teksten[] = $waarde;
+				}
+			}
+		);
+
+		foreach ( $teksten as $tekst ) {
+			if ( preg_match_all( '#https?://[^\s"\'<>()\\\\]+#i', $tekst, $m ) ) {
+				foreach ( $m[0] as $url ) {
+					$verwijzingen['external_links'][ rtrim( $url, '.,;' ) ] = true;
+				}
+			}
+
+			if ( preg_match_all( '/\bkb-custom-(\d+)\b/', $tekst, $m ) ) {
+				foreach ( $m[1] as $nummer ) {
+					$verwijzingen['icons'][ (int) $nummer ] = true;
+				}
+			}
+
+			if ( preg_match( '/^palette(\d+)$/', $tekst ) ) {
+				$verwijzingen['palette'][ $tekst ] = true;
+			}
+		}
+
+		// Media: een array met een id en een url-achtig veld ernaast is in
+		// Kadence vrijwel altijd een bijlage (backgroundImg, image, mediaUrl).
+		$zoek_media = static function ( $waarde ) use ( &$zoek_media, &$verwijzingen, $naam, $id ) {
+			if ( ! is_array( $waarde ) ) {
+				return;
+			}
+
+			$url = '';
+
+			foreach ( array( 'img', 'url', 'src', 'mediaUrl' ) as $veld ) {
+				if ( isset( $waarde[ $veld ] ) && is_string( $waarde[ $veld ] ) && '' !== $waarde[ $veld ] ) {
+					$url = $waarde[ $veld ];
+				}
+			}
+
+			if ( '' !== $url && isset( $waarde['id'] ) && is_numeric( $waarde['id'] ) && (int) $waarde['id'] > 0 ) {
+				$verwijzingen['media'][] = array( 'id' => (int) $waarde['id'], 'url' => $url, 'block' => $naam, 'unique_id' => $id );
+			}
+
+			foreach ( $waarde as $kind ) {
+				$zoek_media( $kind );
+			}
+		};
+
+		$zoek_media( $attrs );
+
+		// Termen: Kadence bewaart gekozen termen als [{value, label}].
+		foreach ( array( 'categories', 'tags' ) as $veld ) {
+			if ( empty( $attrs[ $veld ] ) || ! is_array( $attrs[ $veld ] ) ) {
+				continue;
+			}
+
+			foreach ( $attrs[ $veld ] as $term ) {
+				if ( is_array( $term ) && isset( $term['value'] ) ) {
+					$verwijzingen['terms'][] = array(
+						'id'        => (int) $term['value'],
+						'label'     => isset( $term['label'] ) ? (string) $term['label'] : '',
+						'taxonomy'  => isset( $attrs['taxType'] ) ? (string) $attrs['taxType'] : '',
+						'block'     => $naam,
+						'unique_id' => $id,
+					);
+				}
+			}
+		}
+
+		if ( ! empty( $attrs['className'] ) && is_string( $attrs['className'] ) ) {
+			foreach ( preg_split( '/\s+/', trim( $attrs['className'] ) ) as $klasse ) {
+				if ( '' !== $klasse ) {
+					$verwijzingen['css_classes'][ $klasse ] = true;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Zoek elke verwijzing op op DEZE site.
+	 *
+	 * Wat niet bestaat wordt een waarschuwing met unresolved, en daarmee geen
+	 * token zonder accept_warnings. Wat wel bestaat komt als informatie in het
+	 * rapport, zodat zichtbaar is wat er meegekomen is.
+	 *
+	 * @param array $verwijzingen   De verzamelde verwijzingen.
+	 * @param array $waarschuwingen Verzameling.
+	 *
+	 * @return array Het rapport per soort.
+	 */
+	private static function beoordeel_verwijzingen( $verwijzingen, &$waarschuwingen ) {
+		$eigen_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		$rapport    = array();
+
+		// Links.
+		$extern = array();
+		$intern_ontbreekt = array();
+
+		foreach ( array_keys( $verwijzingen['external_links'] ) as $url ) {
+			$host = wp_parse_url( $url, PHP_URL_HOST );
+
+			if ( $host && $host !== $eigen_host ) {
+				$extern[] = $url;
+				continue;
+			}
+
+			// Op deze site: een upload moet een bijlage zijn, een pagina een post.
+			if ( false !== strpos( $url, '/wp-content/uploads/' ) ) {
+				if ( 0 === self::bijlage_voor_url( $url ) ) {
+					$intern_ontbreekt[] = $url;
+				}
+			} elseif ( 0 === url_to_postid( $url ) && untrailingslashit( $url ) !== untrailingslashit( home_url() ) ) {
+				$intern_ontbreekt[] = $url;
+			}
+		}
+
+		$rapport['external_links'] = array_slice( $extern, 0, 50 );
+
+		if ( ! empty( $extern ) ) {
+			$hosts = array();
+
+			foreach ( $extern as $url ) {
+				$hosts[ (string) wp_parse_url( $url, PHP_URL_HOST ) ] = true;
+			}
+
+			$waarschuwingen[] = array(
+				'check'      => 'external_links',
+				'unresolved' => true,
+				'detail'     => sprintf(
+					/* translators: 1: number of links, 2: hosts. */
+					__( '%1$d link(s) naar een ander domein (%2$s). Komt de markup van een andere omgeving, zet het domein dan om met replace. Is het bewust een externe link, accepteer dan.', 'mcp-abilities-kadence' ),
+					count( $extern ),
+					implode( ', ', array_keys( $hosts ) )
+				),
+			);
+		}
+
+		$rapport['missing_on_this_site'] = array_slice( $intern_ontbreekt, 0, 50 );
+
+		if ( ! empty( $intern_ontbreekt ) ) {
+			$waarschuwingen[] = array(
+				'check'      => 'missing_links',
+				'unresolved' => true,
+				'detail'     => sprintf(
+					/* translators: %d: number of links. */
+					__( '%d link(s) naar deze site wijzen naar een pagina of bestand dat hier niet bestaat.', 'mcp-abilities-kadence' ),
+					count( $intern_ontbreekt )
+				),
+			);
+		}
+
+		// Media.
+		$media = array();
+
+		foreach ( $verwijzingen['media'] as $item ) {
+			$bijlage   = get_post( $item['id'] );
+			$bestaat   = $bijlage && 'attachment' === $bijlage->post_type;
+			$zelfde    = $bestaat && self::zelfde_bestand( wp_get_attachment_url( $item['id'] ), $item['url'] );
+			$item['status'] = ! $bestaat ? 'missing' : ( $zelfde ? 'ok' : 'different_file' );
+			$media[]  = $item;
+
+			if ( 'ok' !== $item['status'] ) {
+				$waarschuwingen[] = array(
+					'check'      => 'media',
+					'unresolved' => true,
+					'block'      => $item['block'],
+					'unique_id'  => $item['unique_id'],
+					'detail'     => 'missing' === $item['status']
+						? sprintf(
+							/* translators: %d: attachment ID. */
+							__( 'Media-ID %d bestaat hier niet. Upload het bestand en zet het ID om met media_map, of kies het beeld daarna in de editor opnieuw.', 'mcp-abilities-kadence' ),
+							$item['id']
+						)
+						: sprintf(
+							/* translators: %d: attachment ID. */
+							__( 'Media-ID %d bestaat hier, maar is een ander bestand dan de URL ernaast. Op een andere site verwijst hetzelfde nummer meestal naar iets anders; zet het om met media_map.', 'mcp-abilities-kadence' ),
+							$item['id']
+						),
+				);
+			}
+		}
+
+		$rapport['media'] = $media;
+
+		// Custom SVG-iconen.
+		$iconen = array();
+
+		foreach ( array_keys( $verwijzingen['icons'] ) as $nummer ) {
+			$icoon   = get_post( $nummer );
+			$bestaat = $icoon && 'kadence_custom_svg' === $icoon->post_type;
+
+			$iconen[] = array(
+				'icon'   => 'kb-custom-' . $nummer,
+				'status' => $bestaat ? 'ok' : 'missing',
+				'title'  => $bestaat ? get_the_title( $icoon ) : '',
+			);
+
+			if ( ! $bestaat ) {
+				$waarschuwingen[] = array(
+					'check'      => 'icon',
+					'unresolved' => true,
+					'detail'     => sprintf(
+						/* translators: %d: post ID. */
+						__( 'Custom SVG kb-custom-%d bestaat hier niet. Maak het icoon aan onder Kadence → Custom SVGs en zet het nummer om met replace.', 'mcp-abilities-kadence' ),
+						$nummer
+					),
+				);
+			}
+		}
+
+		$rapport['icons'] = $iconen;
+
+		// Termen.
+		$termen = array();
+
+		foreach ( $verwijzingen['terms'] as $item ) {
+			$term    = get_term( $item['id'] );
+			$bestaat = $term && ! is_wp_error( $term );
+			$item['status'] = ! $bestaat ? 'missing' : ( ( '' === $item['label'] || $term->name === $item['label'] ) ? 'ok' : 'different_term' );
+			$termen[] = $item;
+
+			if ( 'ok' !== $item['status'] ) {
+				$waarschuwingen[] = array(
+					'check'      => 'term',
+					'unresolved' => true,
+					'block'      => $item['block'],
+					'unique_id'  => $item['unique_id'],
+					'detail'     => sprintf(
+						/* translators: 1: term ID, 2: label. */
+						__( 'Term %1$d ("%2$s") bestaat hier niet of heet anders. Term-ID\'s verschillen per site; zet het om met term_map of kies het filter in de editor opnieuw.', 'mcp-abilities-kadence' ),
+						$item['id'],
+						$item['label']
+					),
+				);
+			}
+		}
+
+		$rapport['terms'] = $termen;
+
+		// Paletkleuren: geen fout, wel van belang. palette6 is op elke site
+		// iets anders.
+		$stijlen = Kadence_MCP_Inventory::get_global_styles();
+		$palet   = isset( $stijlen['palette']['value'] ) && is_array( $stijlen['palette']['value'] ) ? $stijlen['palette']['value'] : array();
+		$actief  = isset( $palet['active'] ) ? (string) $palet['active'] : 'palette';
+		$kleuren = array();
+
+		if ( isset( $palet[ $actief ] ) && is_array( $palet[ $actief ] ) ) {
+			foreach ( $palet[ $actief ] as $kleur ) {
+				if ( isset( $kleur['slug'], $kleur['color'] ) ) {
+					$kleuren[ (string) $kleur['slug'] ] = (string) $kleur['color'];
+				}
+			}
+		}
+
+		$paletrapport = array();
+
+		foreach ( array_keys( $verwijzingen['palette'] ) as $slug ) {
+			$paletrapport[ $slug ] = isset( $kleuren[ $slug ] ) ? $kleuren[ $slug ] : null;
+		}
+
+		ksort( $paletrapport, SORT_NATURAL );
+		$rapport['palette_on_this_site'] = (object) $paletrapport;
+
+		// Eigen klassen: die horen bij CSS van het thema of de site, en die
+		// komt niet mee met de markup.
+		$rapport['css_classes'] = array_keys( $verwijzingen['css_classes'] );
+
+		if ( ! empty( $rapport['css_classes'] ) ) {
+			$waarschuwingen[] = array(
+				'check'  => 'css_classes',
+				'detail' => sprintf(
+					/* translators: %s: class names. */
+					__( 'De markup gebruikt eigen CSS-klassen (%s). De CSS daarvoor komt niet mee; controleer dat die op deze site staat.', 'mcp-abilities-kadence' ),
+					implode( ', ', $rapport['css_classes'] )
+				),
+			);
+		}
+
+		return $rapport;
+	}
+
+	/**
+	 * Het bijlage-ID bij een upload-URL, ook voor een verkleinde versie.
+	 *
+	 * attachment_url_to_postid() kent alleen het origineel. Kadence en de
+	 * editor bewaren vaak de URL van een formaat, zoals foto-1024x683.jpg.
+	 *
+	 * @param string $url De URL.
+	 *
+	 * @return int
+	 */
+	private static function bijlage_voor_url( $url ) {
+		$id = attachment_url_to_postid( $url );
+
+		if ( 0 === $id ) {
+			$origineel = preg_replace( '/-\d+x\d+(\.[a-z0-9]+)$/i', '$1', $url );
+			$id        = $origineel !== $url ? attachment_url_to_postid( $origineel ) : 0;
+		}
+
+		if ( 0 === $id ) {
+			$geschaald = preg_replace( '/(\.[a-z0-9]+)$/i', '-scaled$1', preg_replace( '/-\d+x\d+(\.[a-z0-9]+)$/i', '$1', $url ) );
+			$id        = attachment_url_to_postid( $geschaald );
+		}
+
+		return (int) $id;
+	}
+
+	/**
+	 * Wijzen twee URL's naar hetzelfde bestand, formaat buiten beschouwing?
+	 *
+	 * @param string $a Eerste URL.
+	 * @param string $b Tweede URL.
+	 *
+	 * @return bool
+	 */
+	private static function zelfde_bestand( $a, $b ) {
+		$kaal = static function ( $url ) {
+			$pad = (string) wp_parse_url( (string) $url, PHP_URL_PATH );
+			$pad = preg_replace( '/-\d+x\d+(\.[a-z0-9]+)$/i', '$1', $pad );
+			$pad = preg_replace( '/-scaled(\.[a-z0-9]+)$/i', '$1', $pad );
+
+			return basename( $pad );
+		};
+
+		return '' !== $kaal( $a ) && $kaal( $a ) === $kaal( $b );
+	}
+
+	/**
+	 * Letterlijke vervanging in attributen en markup van een hele boom.
+	 *
+	 * @param array  $blokken De boom.
+	 * @param string $van     Zoektekst.
+	 * @param string $naar    Vervanging.
+	 * @param int    $aantal  Teller.
+	 *
+	 * @return array
+	 */
+	private static function vervang_in_boom( $blokken, $van, $naar, &$aantal ) {
+		foreach ( $blokken as $i => $blok ) {
+			if ( isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ) {
+				array_walk_recursive(
+					$blokken[ $i ]['attrs'],
+					static function ( &$waarde ) use ( $van, $naar, &$aantal ) {
+						if ( is_string( $waarde ) && false !== strpos( $waarde, $van ) ) {
+							$aantal += substr_count( $waarde, $van );
+							$waarde  = str_replace( $van, $naar, $waarde );
+						}
+					}
+				);
+			}
+
+			if ( isset( $blok['innerHTML'] ) && is_string( $blok['innerHTML'] ) ) {
+				$blokken[ $i ]['innerHTML'] = str_replace( $van, $naar, $blok['innerHTML'] );
+			}
+
+			if ( isset( $blok['innerContent'] ) && is_array( $blok['innerContent'] ) ) {
+				foreach ( $blok['innerContent'] as $j => $stuk ) {
+					if ( is_string( $stuk ) ) {
+						$aantal += substr_count( $stuk, $van );
+						$blokken[ $i ]['innerContent'][ $j ] = str_replace( $van, $naar, $stuk );
+					}
+				}
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$blokken[ $i ]['innerBlocks'] = self::vervang_in_boom( $blok['innerBlocks'], $van, $naar, $aantal );
+			}
+		}
+
+		return $blokken;
+	}
+
+	/**
+	 * Maak van een aangeleverde kaart oud => nieuw een schone lijst gehele getallen.
+	 *
+	 * @param mixed $ruw De invoer.
+	 *
+	 * @return array<int,int>
+	 */
+	private static function id_kaart( $ruw ) {
+		$uit = array();
+
+		if ( ! is_array( $ruw ) && ! is_object( $ruw ) ) {
+			return $uit;
+		}
+
+		foreach ( (array) $ruw as $oud => $nieuw ) {
+			if ( is_numeric( $oud ) && is_numeric( $nieuw ) && (int) $oud > 0 && (int) $nieuw > 0 ) {
+				$uit[ (int) $oud ] = (int) $nieuw;
+			}
+		}
+
+		return $uit;
+	}
+
+	/**
+	 * Zet media- en term-ID's om volgens de kaarten.
+	 *
+	 * Media: elke array met een id en een url-veld ernaast. De url wordt die
+	 * van het nieuwe bestand, zodat id en url niet uit elkaar lopen.
+	 * Termen: elementen van categories en tags in de vorm {value, label}.
+	 *
+	 * @param array $blokken     De boom.
+	 * @param array $media_kaart oud => nieuw.
+	 * @param array $term_kaart  oud => nieuw.
+	 * @param array $omgezet     Tellers.
+	 *
+	 * @return array
+	 */
+	private static function zet_ids_om( $blokken, $media_kaart, $term_kaart, &$omgezet ) {
+		$media = static function ( $waarde ) use ( &$media, $media_kaart, &$omgezet ) {
+			if ( ! is_array( $waarde ) ) {
+				return $waarde;
+			}
+
+			$url_veld = '';
+
+			foreach ( array( 'img', 'url', 'src', 'mediaUrl' ) as $veld ) {
+				if ( isset( $waarde[ $veld ] ) && is_string( $waarde[ $veld ] ) ) {
+					$url_veld = $veld;
+				}
+			}
+
+			if ( '' !== $url_veld && isset( $waarde['id'] ) && is_numeric( $waarde['id'] ) && isset( $media_kaart[ (int) $waarde['id'] ] ) ) {
+				$nieuw         = $media_kaart[ (int) $waarde['id'] ];
+				$waarde['id']  = $nieuw;
+				$bestand       = wp_get_attachment_url( $nieuw );
+
+				if ( $bestand ) {
+					$waarde[ $url_veld ] = $bestand;
+				}
+
+				$omgezet['media']++;
+			}
+
+			foreach ( $waarde as $sleutel => $kind ) {
+				if ( is_array( $kind ) ) {
+					$waarde[ $sleutel ] = $media( $kind );
+				}
+			}
+
+			return $waarde;
+		};
+
+		foreach ( $blokken as $i => $blok ) {
+			if ( isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ) {
+				if ( ! empty( $media_kaart ) ) {
+					$blokken[ $i ]['attrs'] = $media( $blok['attrs'] );
+				}
+
+				foreach ( array( 'categories', 'tags' ) as $veld ) {
+					if ( empty( $term_kaart ) || empty( $blokken[ $i ]['attrs'][ $veld ] ) || ! is_array( $blokken[ $i ]['attrs'][ $veld ] ) ) {
+						continue;
+					}
+
+					foreach ( $blokken[ $i ]['attrs'][ $veld ] as $j => $term ) {
+						if ( is_array( $term ) && isset( $term['value'] ) && isset( $term_kaart[ (int) $term['value'] ] ) ) {
+							$nieuw = $term_kaart[ (int) $term['value'] ];
+							$obj   = get_term( $nieuw );
+
+							$blokken[ $i ]['attrs'][ $veld ][ $j ]['value'] = $nieuw;
+
+							if ( $obj && ! is_wp_error( $obj ) ) {
+								$blokken[ $i ]['attrs'][ $veld ][ $j ]['label'] = $obj->name;
+							}
+
+							$omgezet['terms']++;
+						}
+					}
+				}
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$blokken[ $i ]['innerBlocks'] = self::zet_ids_om( $blok['innerBlocks'], $media_kaart, $term_kaart, $omgezet );
+			}
+		}
+
+		return $blokken;
+	}
+
+	/**
+	 * Markup zonder lege regels, voor een vergelijking die alleen inhoud telt.
+	 *
+	 * @param string $markup De markup.
+	 *
+	 * @return string
+	 */
+	private static function zonder_witregels( $markup ) {
+		return preg_replace( "/\n\s*\n/", "\n", str_replace( "\r\n", "\n", (string) $markup ) );
+	}
+
+	/**
+	 * Een kort stuk tekst voor in een melding.
+	 *
+	 * @param string $tekst De tekst.
+	 *
+	 * @return string
+	 */
+	private static function kort_fragment( $tekst ) {
+		$tekst = trim( wp_strip_all_tags( $tekst ) );
+
+		return strlen( $tekst ) > 80 ? substr( $tekst, 0, 80 ) . '…' : $tekst;
 	}
 
 	/**

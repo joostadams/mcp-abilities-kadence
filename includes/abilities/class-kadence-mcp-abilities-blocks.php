@@ -294,7 +294,7 @@ class Kadence_MCP_Abilities_Blocks {
 		$uitvoer = array();
 
 		foreach ( $plak as $sleutel => $definitie ) {
-			$samenvatting          = Kadence_MCP_Inventory::vat_attribuut_samen( $sleutel, is_array( $definitie ) ? $definitie : array() );
+			$samenvatting          = Kadence_MCP_Inventory::vat_attribuut_samen( $sleutel, is_array( $definitie ) ? $definitie : array(), $naam );
 			$samenvatting['group'] = Kadence_MCP_Inventory::groep_van_attribuut( $sleutel );
 
 			$uitvoer[] = $samenvatting;
