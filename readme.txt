@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.20.1
+Stable tag: 1.20.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,9 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.20.2 =
+* Het instellingenscherm zegt nu waar de MCP Adapter vandaan komt. "Ontbreekt" was een doodlopend spoor: de adapter staat niet in de plugin-directory, dus zoeken onder Plugins > Nieuwe plugin levert niets op, en van de twee downloads op GitHub werkt alleen het bestand onder Assets — de broncode mist vendor/ en daarmee de autoloader. Ontbreekt de Abilities API, dan noemt het scherm de WordPress-versie van deze site erbij, want vanaf 6.9 zit die in core.
 
 = 1.20.1 =
 * De ondergrens gaat van WordPress 6.8 naar 6.9. Vanaf 6.9 zit de Abilities API in core, en daarmee valt er een vereiste weg die je anders als losse plugin erbij moet zetten. Op 6.8 werkte de plugin alleen met die extra plugin; dat uitleggen in documentatie kost meer dan het oplevert.

@@ -326,6 +326,42 @@ class Kadence_MCP_Settings {
 						);
 						?>
 					</p>
+
+					<?php
+					// "Ontbreekt" zonder vervolg is een doodlopend spoor. De
+					// adapter staat niet in de plugin-directory, dus zoeken
+					// onder Plugins > Nieuwe plugin levert niets op, en van de
+					// twee downloads op GitHub werkt er maar een: de broncode
+					// mist vendor/ en dus de autoloader.
+					if ( ! class_exists( '\WP\MCP\Core\McpAdapter' ) ) :
+						?>
+						<p>
+							<?php
+							printf(
+								/* translators: %s: link to the MCP Adapter release asset. */
+								esc_html__( 'De MCP Adapter staat niet in de plugin-directory; zoeken levert niets op. Haal %s van de releasepagina en installeer die via Plugins → Nieuwe plugin → Plugin uploaden. Neem het bestand onder Assets, niet de broncode — die mist zijn dependencies.', 'mcp-abilities-kadence' ),
+								'<a href="https://github.com/WordPress/mcp-adapter/releases/latest" target="_blank" rel="noopener noreferrer"><code>mcp-adapter.zip</code></a>'
+							);
+							?>
+						</p>
+					<?php endif; ?>
+
+					<?php
+					// De Abilities API zit in core vanaf 6.9, en dat is ook de
+					// ondergrens van deze plugin. Ontbreekt de functie, dan
+					// draait deze site ouder dan dat.
+					if ( ! function_exists( 'wp_register_ability' ) ) :
+						?>
+						<p>
+							<?php
+							printf(
+								/* translators: %s: the current WordPress version. */
+								esc_html__( 'De Abilities API zit in WordPress vanaf 6.9. Deze site draait %s; werk WordPress bij, of installeer de Abilities API als losse plugin.', 'mcp-abilities-kadence' ),
+								esc_html( get_bloginfo( 'version' ) )
+							);
+							?>
+						</p>
+					<?php endif; ?>
 				</div>
 			<?php endif; ?>
 
