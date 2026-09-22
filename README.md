@@ -69,21 +69,47 @@ dat er niets ís, of dat er niet gekeken kon worden.
 
 ## Nodig
 
-- WordPress 6.8 of hoger, PHP 7.4 of hoger
-- De **WordPress Abilities API** (in core vanaf 6.9, daarvoor als plugin)
-- De **MCP Adapter** als eigen plugin. Een gevendorde kopie binnen een andere
-  plugin — Gravity Forms levert er een mee — laat de klasse wél bestaan maar
-  start niets. Deze plugin start de adapter daarom zelf zodra je de
-  hoofdschakelaar aanzet, maar alleen dan
+- WordPress 6.9 of hoger, PHP 7.4 of hoger. Vanaf 6.9 zit de
+  [**Abilities API**](https://github.com/WordPress/abilities-api) in core;
+  daaronder heb je die als losse plugin nodig, en daar ligt de ondergrens dus
+- De [**MCP Adapter**](https://github.com/WordPress/mcp-adapter), als eigen
+  plugin ernaast. Hij staat niet in de plugin-directory, dus zoeken onder
+  **Plugins → Nieuwe plugin** levert niets op. Haal de ZIP van zijn
+  [Releases-pagina](https://github.com/WordPress/mcp-adapter/releases/latest),
+  of met WP-CLI:
+
+      wp plugin install https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip --activate
+
+  Een gevendorde kopie binnen een andere plugin — Gravity Forms levert er een
+  mee — laat de klasse wél bestaan maar start niets. Deze plugin start de
+  adapter daarom zelf zodra je de hoofdschakelaar aanzet, maar alleen dan.
+  Bouw daar niet op: de adapter raadt bundelen zelf af en verwijdert die vorm
+  in een latere versie
 - Kadence Blocks. De rest van de Kadence-stack is optioneel; wat er niet is
   wordt gewoon niet gemeld
 
 Ontbreekt de Abilities API of de adapter, dan registreert de plugin niets en
 legt het instellingenscherm uit wat er mist.
 
+## Downloaden
+
+Eén bestand, en het staat niet achter de groene knop.
+
+Pak `mcp-abilities-kadence.zip` van de
+[Releases-pagina](https://github.com/joostadams/mcp-abilities-kadence/releases/latest).
+Dat is de ZIP die bij die versietag is gebouwd, met de mapnaam die WordPress
+verwacht en zonder de ontwikkelbestanden.
+
+Dus niet **Code → Download ZIP**. Die geeft je de huidige staat van `main` — dat
+hoeft geen uitgebrachte versie te zijn — in een map met `-main` erachter.
+
+De agent skill hoef je hier niet apart te halen. Die zit in de plugin en staat
+na installatie als download onder **Kadence Blocks → MCP**.
+
 ## Installeren
 
-1. De map in `wp-content/plugins/` zetten en activeren
+1. De ZIP installeren via **Plugins → Nieuwe plugin → Plugin uploaden**, en
+   activeren
 2. Naar **Kadence Blocks → MCP**
 3. *MCP inschakelen* aanzetten
 4. De tools aanvinken die je wil aanbieden — standaard staat alles uit
@@ -154,8 +180,12 @@ De toggle is oppervlakteverkleining. De capability is de grendel.
 
 Onder `skill/` staat een skill met de werkwijzen en valkuilen die niet in een
 toolschema passen. De serverbeschrijving draagt de conventies al en wordt
-automatisch geladen; de skill is het niveau daarboven. Zie `skill/README.md`
-voor het installeren.
+automatisch geladen; de skill is het niveau daarboven.
+
+Je haalt hem op met de knop *Skill downloaden* onder **Kadence Blocks → MCP** —
+die levert dezelfde map, meegeleverd met de geïnstalleerde versie. Pak de ZIP
+uit in de skills-map van je agent, zodat `kadence-blocks` daar rechtstreeks in
+staat. `skill/README.md` beschrijft hetzelfde voor wie vanuit de repo werkt.
 
 ## Uitbreiden
 

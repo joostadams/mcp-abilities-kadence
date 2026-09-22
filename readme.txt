@@ -1,10 +1,10 @@
 === MCP Abilities - Kadence ===
 Contributors: joostadams
 Tags: mcp, kadence, abilities, ai
-Requires at least: 6.8
+Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.20.0
+Stable tag: 1.20.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,12 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.20.1 =
+* De ondergrens gaat van WordPress 6.8 naar 6.9. Vanaf 6.9 zit de Abilities API in core, en daarmee valt er een vereiste weg die je anders als losse plugin erbij moet zetten. Op 6.8 werkte de plugin alleen met die extra plugin; dat uitleggen in documentatie kost meer dan het oplevert.
+* De documentatie zei niet waar je de plugin ophaalt. Wie de repo opende kwam uit bij de groene Code-knop, en die geeft de staat van main in een map met -main erachter — geen uitgebrachte versie, en een mapnaam die WordPress niet verwacht. De README wijst nu naar de ZIP onder Releases, die de workflow per versietag bouwt.
+* Diezelfde workflow laat CONTEXT.md voortaan buiten de ZIP. Dat zijn ontwerpbesluiten voor wie de plugin aanpast en die horen in de repo, niet op een productiesite. De skillmap gaat wél mee: de plugin serveert die zelf als download onder Kadence Blocks > MCP, en zonder die bestanden meldt dat scherm dat de skill ontbreekt.
+* Over de MCP Adapter stond er te weinig. Hij staat niet in de plugin-directory, dus zoeken onder Plugins > Nieuwe plugin levert niets op; het moet de ZIP van zijn eigen Releases-pagina zijn. Een gevendorde kopie binnen een andere plugin telt mee voor de klassecontrole, maar de adapter raadt die vorm zelf af en verwijdert hem in een latere versie — daar bouw je dus niet op.
 
 = 1.20.0 =
 * Per groep een "Alle N aanvinken" op het instellingenscherm. Vijfendertig vakjes met de hand aanvinken is werk dat niemand hoort te doen, en het nodigt uit tot half afmaken. Bewust per groep en niet één knop voor het hele scherm: lezen en schrijven zijn verschillende beslissingen, en één vinkje dat ze allebei aanzet is precies de klik die je niet wil. Het groepsvakje staat op indeterminate zodra een groep half aanstaat — een leeg vakje boven een half aangevinkte lijst leest als "er staat niets aan", en dan klik je hem aan om te zien wat er gebeurt.

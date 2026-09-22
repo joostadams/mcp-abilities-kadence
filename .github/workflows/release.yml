@@ -35,6 +35,11 @@ jobs:
 
       # Uitsluiten in plaats van insluiten, verankerd met een / zodat een map
       # met dezelfde naam binnen vendor/ niet per ongeluk wordt weggeknipt.
+      #
+      # CONTEXT.md is ontwikkeldocumentatie en hoort niet op een productiesite;
+      # in de repo blijft hij wel staan. skill/ gaat juist wél mee: de plugin
+      # serveert die map zelf als download onder Kadence Blocks -> MCP, en
+      # zonder die bestanden meldt dat scherm dat de skillmap ontbreekt.
       - name: ZIP bouwen
         run: |
           mkdir -p dist/mcp-abilities-kadence
@@ -43,7 +48,8 @@ jobs:
             --exclude '/.github' \
             --exclude '/dist' \
             --exclude '/.gitignore' \
-            --exclude '/.gitattributes'
+            --exclude '/.gitattributes' \
+            --exclude '/CONTEXT.md'
           cd dist && zip -qr mcp-abilities-kadence.zip mcp-abilities-kadence
           unzip -l mcp-abilities-kadence.zip | tail -5
 
