@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.22.0
+Stable tag: 1.23.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,16 +12,16 @@ Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema uitlezen en
 
 == Description ==
 
-Zesendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
+Zevenendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
 de Kadence-opbouw van een site kan uitlezen en gericht kan wijzigen: welke
 blokken er zijn, welke attributen die hebben, hoe een pagina is opgebouwd,
 welke headers en elementen er staan, en welk kleurenpalet er geldt.
 
-Negentien daarvan zijn alleen-lezen. Zeventien schrijven: set-attributes,
+Negentien daarvan zijn alleen-lezen. Achttien schrijven: set-attributes,
 style-blocks, set-text, insert-blocks, remove-blocks, duplicate-blocks,
-replace-block, create-page, set-page-status, create-query, create-query-card,
+replace-block, create-page, create-entity, set-page-status, create-query, create-query-card,
 set-query, sync-query-facets, set-card-layout, set-entity-meta,
-set-global-typography en set-site-css. Ze vragen alle zeventien een eigen capability (kadence_mcp_write, die na installatie aan
+set-global-typography en set-site-css. Ze vragen alle achttien een eigen capability (kadence_mcp_write, die na installatie aan
 niemand is toegekend), bewerkrecht op de post volgens WordPress, en een token
 uit een voorafgaande controlestap. Na elke schrijfactie wordt de post
 teruggelezen en vergeleken met wat er bedoeld was.
@@ -38,6 +38,14 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.23.0 =
+* Nieuw: kadence/create-entity. Maakt een lege kadence_navigation, kadence_header of kadence_element aan met ALLE instellingen die Kadence voor dat posttype registreert, op hun standaard — anders weigert set-entity-meta ze daarna, omdat een ontbrekende sleutel een typefout kan zijn. Afwijkende instellingen gaan meteen mee in meta, alleen geregistreerde sleutels. Een kadence_vector maakt hij uit een SVG, via de eigen route van Kadence en dus door de sanitizer van Kadence. Standaard een concept: een gepubliceerd element op replace_footer vervangt meteen de footer van de hele site. Samen met post_map in prepare-import is een header met navigaties, of een footer-element, nu van de ene omgeving naar de andere over te zetten zonder wizards.
+* validate-write blokkeert gutter en rowGap op een Sectie als de bijbehorende gutterVariable of rowGapVariable daar niet "custom" is: Kadence gebruikt dan een preset (1rem) en negeert het getal. Gemeten: twintig Secties met gutter kregen allemaal 1rem. Bij gutter in een verticale Sectie komt erbij dat rowGap de ruimte tussen de kinderen is.
+* validate-write waarschuwt bij flexBasis (geldt voor alle kinderen, op de ouder), bij background "transparent" op een knop (de editor toont dan de themaknop; rgba(0,0,0,0) werkt overal), en bij het oude borderWidth op een Sectie (de rand komt dan zonder kleur).
+* set-entity-meta waarschuwt bij spacing op een navigatie zolang spacingUnit op em staat, de standaard van Kadence: 20 werd 340 px.
+* generate-section zet de ruimte in een Sectie zelf goed: gutterVariable of rowGapVariable op "custom" waar een getal staat, en gutter in een verticale Sectie wordt rowGap. Elke correctie staat in het nieuwe veld notes.
+* generate-section kan kadence/vector, kadence/navigation en kadence/navigation-link bouwen, afgelezen van markup die Kadence schreef. De lijst bij het recept custom komt nu uit de profielen en noemt alle bouwbare blokken; hij noemde er vijf, terwijl er ook postgrid, dynamichtml, slider en de queryblokken waren.
 
 = 1.22.0 =
 * Nieuw in prepare-import: post_map. Blokken die met hun id naar een andere post verwijzen — kadence/navigation, kadence/header, kadence/query, kadence/query-card, kadence/vector, kadence/advanced-form, en een kadence/navigation-link met kind post-type — krijgen het nieuwe ID uit de kaart; bij het menu-item wordt de url de permalink van de nieuwe post. Zonder deze kaart kon een header met navigaties, of een mega menu met kleinere menu's erin, niet naar een andere omgeving: post-ID's verschillen per site en replace kan geen getallen omzetten.

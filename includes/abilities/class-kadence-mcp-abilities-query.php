@@ -354,6 +354,7 @@ class Kadence_MCP_Abilities_Query {
 							'before'  => array( 'type' => 'object' ),
 							'after'   => array( 'type' => 'object' ),
 							'changed' => array( 'type' => 'array' ),
+							'notes'   => array( 'type' => 'array' ),
 							'written' => array( 'type' => 'boolean' ),
 							'token'   => array( 'type' => 'string' ),
 							'status'  => array( 'type' => 'string' ),
@@ -549,6 +550,7 @@ class Kadence_MCP_Abilities_Query {
 			'before'  => (object) $voor,
 			'after'   => (object) $na,
 			'changed' => $gewijzigd,
+			'notes'   => self::entiteitmeta_notities( $post, $voorstel ),
 		);
 
 		$verwacht = Kadence_MCP_Inventory::schrijf_token( $post, 'entiteitmeta', $voorstel );
@@ -611,6 +613,52 @@ class Kadence_MCP_Abilities_Query {
 					),
 			)
 		);
+	}
+
+	/**
+	 * Wat een meta-waarde anders doet dan hij lijkt.
+	 *
+	 * Een navigatie rekent spacing standaard in em (_kad_navigation_spacingUnit
+	 * heeft als default "em"). Wie 20 bedoelt als pixels krijgt bij een
+	 * lettergrootte van 17 px 340 px tussen de items. Gemeten op 23-09-2026.
+	 *
+	 * @param WP_Post $post     De entiteit.
+	 * @param array   $voorstel De voorgenomen meta.
+	 *
+	 * @return array
+	 */
+	private static function entiteitmeta_notities( $post, $voorstel ) {
+		$notities = array();
+
+		if ( 'kadence_navigation' !== $post->post_type ) {
+			return $notities;
+		}
+
+		$eenheid = array_key_exists( '_kad_navigation_spacingUnit', $voorstel )
+			? (string) $voorstel['_kad_navigation_spacingUnit']
+			: (string) get_post_meta( $post->ID, '_kad_navigation_spacingUnit', true );
+
+		if ( '' === $eenheid ) {
+			$eenheid = 'em';
+		}
+
+		foreach ( array( '_kad_navigation_spacing', '_kad_navigation_spacingTablet', '_kad_navigation_spacingMobile' ) as $sleutel ) {
+			if ( ! isset( $voorstel[ $sleutel ] ) || ! is_array( $voorstel[ $sleutel ] ) ) {
+				continue;
+			}
+
+			$getallen = array_filter( $voorstel[ $sleutel ], 'is_numeric' );
+
+			if ( ! empty( $getallen ) && 'em' === $eenheid ) {
+				$notities[] = sprintf(
+					/* translators: %s: meta key. */
+					__( '%s wordt gerekend in em, want _kad_navigation_spacingUnit staat op em (de standaard van Kadence). 20 wordt dan 20em, bij 17 px letters 340 px. Bedoel je pixels, zet dan _kad_navigation_spacingUnit mee op "px". De volgorde is [rij-gap, kolom-gap, …].', 'mcp-abilities-kadence' ),
+					$sleutel
+				);
+			}
+		}
+
+		return $notities;
 	}
 
 	/**

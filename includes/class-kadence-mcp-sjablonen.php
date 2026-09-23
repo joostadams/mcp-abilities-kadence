@@ -95,7 +95,11 @@ class Kadence_MCP_Sjablonen {
 				'slug'        => 'custom',
 				'label'       => __( 'Vrije opbouw', 'mcp-abilities-kadence' ),
 				'beschrijving' => __( 'Geen sjabloon maar een eigen boom, meegegeven via tree. Gebruik dit zodra een ontwerp niet in een van de vaste vormen past — een hero met een label boven de kop, een sectie met gekleurde balken, kolommen met elk een andere achtergrond. Elke knoop is {block, attrs, text of children, tag}. Alleen blokken waarvan bekend is hoe ze hun markup wegschrijven; elk attribuut wordt getoetst zoals validate-write dat doet.', 'mcp-abilities-kadence' ),
-				'blokken'     => array( 'kadence/rowlayout', 'kadence/column', 'kadence/advancedheading', 'kadence/advancedbtn', 'kadence/singlebtn' ),
+				// Uit de profielen, niet met de hand: deze lijst liep achter en
+				// noemde vijf blokken terwijl er veel meer te bouwen zijn, zodat
+				// wie hem las zelfsluitende blokken als postgrid via een omweg
+				// invoegde.
+				'blokken'     => Kadence_MCP_Profielen::bloknamen(),
 				'slots'       => array( 'tree' ),
 			),
 			array(
@@ -398,6 +402,10 @@ class Kadence_MCP_Sjablonen {
 
 			$attrs = self::vul_kbversion_aan( $bloknaam, $attrs );
 
+			if ( 'kadence/column' === $bloknaam ) {
+				$attrs = self::zet_ruimte_goed( $attrs );
+			}
+
 			$genormaliseerd = Kadence_MCP_Inventory::normaliseer_attributen( $bloknaam, $attrs );
 			$json           = wp_json_encode( (object) $genormaliseerd['attrs'] );
 
@@ -461,6 +469,8 @@ class Kadence_MCP_Sjablonen {
 	 * @return array|WP_Error
 	 */
 	public static function bouw( $slug, $input, $post_id, $bezet = array() ) {
+		self::$notities = array();
+
 		$boom = ( 'custom' === $slug )
 			? self::boom_uit_invoer( isset( $input['tree'] ) ? $input['tree'] : array() )
 			: self::boom( $slug, $input );
@@ -501,6 +511,7 @@ class Kadence_MCP_Sjablonen {
 			'markup'     => $markup,
 			'unique_ids' => $nieuwe,
 			'blokken'    => self::tel_blokken( $geparsed ),
+			'notities'   => self::$notities,
 		);
 	}
 
@@ -830,6 +841,85 @@ class Kadence_MCP_Sjablonen {
 			'markup' => $markup,
 			'blok'   => $geparsed[0],
 		);
+	}
+
+	/**
+	 * Wat de generator bij het bouwen heeft rechtgezet, voor het antwoord.
+	 *
+	 * @var array
+	 */
+	public static $notities = array();
+
+	/**
+	 * Zet de ruimte tussen de kinderen van een Sectie zo, dat Kadence hem ook
+	 * gebruikt.
+	 *
+	 * Kadence leest gutter en rowGap alleen als gutterVariable en
+	 * rowGapVariable op dezelfde plek "custom" zijn; anders geldt een preset en
+	 * wordt het getal stil genegeerd (Kadence_Blocks_CSS::render_row_gap).
+	 * Daarnaast is gutter de ruimte NAAST elkaar: in een verticale Sectie doet
+	 * hij niets zichtbaars, en daar is rowGap wat bedoeld wordt.
+	 *
+	 * Rechtgezet wordt alleen wat eenduidig is: een getal zonder zijn
+	 * *Variable krijgt "custom", en gutter in een verticale Sectie zonder
+	 * rowGap wordt rowGap. Wat de gebruiker zelf al expliciet zette blijft
+	 * staan. Elke correctie komt terug in notes.
+	 *
+	 * @param array $attrs De attributen van de Sectie.
+	 *
+	 * @return array
+	 */
+	private static function zet_ruimte_goed( $attrs ) {
+		$richting = isset( $attrs['direction'][0] ) && '' !== $attrs['direction'][0] ? (string) $attrs['direction'][0] : 'vertical';
+		$naam     = isset( $attrs['metadata']['name'] ) ? (string) $attrs['metadata']['name'] : 'Sectie';
+		$heeft    = static function ( $waarde ) {
+			return is_array( $waarde ) && array_filter( $waarde, 'is_numeric' );
+		};
+
+		if ( 0 === strpos( $richting, 'vertical' ) && $heeft( isset( $attrs['gutter'] ) ? $attrs['gutter'] : null ) && ! $heeft( isset( $attrs['rowGap'] ) ? $attrs['rowGap'] : null ) ) {
+			$attrs['rowGap'] = $attrs['gutter'];
+			unset( $attrs['gutter'] );
+
+			if ( isset( $attrs['gutterVariable'] ) ) {
+				unset( $attrs['gutterVariable'] );
+			}
+
+			self::$notities[] = sprintf(
+				/* translators: %s: section name. */
+				__( '%s is verticaal: gutter is daar de ruimte naast elkaar en doet niets zichtbaars. Omgezet naar rowGap.', 'mcp-abilities-kadence' ),
+				$naam
+			);
+		}
+
+		foreach ( array( 'gutter' => 'gutterVariable', 'rowGap' => 'rowGapVariable' ) as $getal => $variabel ) {
+			if ( ! $heeft( isset( $attrs[ $getal ] ) ? $attrs[ $getal ] : null ) ) {
+				continue;
+			}
+
+			$stand     = isset( $attrs[ $variabel ] ) && is_array( $attrs[ $variabel ] ) ? $attrs[ $variabel ] : array( '', '', '' );
+			$aangevuld = false;
+
+			foreach ( array( 0, 1, 2 ) as $i ) {
+				if ( isset( $attrs[ $getal ][ $i ] ) && is_numeric( $attrs[ $getal ][ $i ] ) && ( ! isset( $stand[ $i ] ) || '' === $stand[ $i ] ) ) {
+					$stand[ $i ] = 'custom';
+					$aangevuld   = true;
+				}
+			}
+
+			if ( $aangevuld ) {
+				$attrs[ $variabel ] = array_values( array_replace( array( '', '', '' ), $stand ) );
+
+				self::$notities[] = sprintf(
+					/* translators: 1: section name, 2: attribute, 3: companion attribute. */
+					__( '%1$s: %3$s op "custom" gezet waar %2$s een getal heeft; zonder dat gebruikt Kadence een preset en negeert het getal.', 'mcp-abilities-kadence' ),
+					$naam,
+					$getal,
+					$variabel
+				);
+			}
+		}
+
+		return $attrs;
 	}
 
 	/**

@@ -10,7 +10,7 @@ Waarom deze plugin is zoals hij is. Voor wie hem later aanpast.
 > beschrijving van hoe het schrijven is omheind — want dat is wat er van het
 > oorspronkelijke besluit over is.
 >
-> **Opnieuw bijgewerkt.** Het waren er zes; het zijn er inmiddels zeventien, en
+> **Opnieuw bijgewerkt.** Het waren er zes; het zijn er inmiddels achttien, en
 > ze raken niet langer alleen `post_content`. De bewering dat opties nergens
 > worden aangeraakt is sinds `set-global-typography` en `set-site-css` onjuist.
 
@@ -20,6 +20,12 @@ valt.
 **Post content.** De meeste. Ze raken `post_content` van de post die je noemt en
 WordPress maakt er een revisie van, dus terugdraaien kan via het
 revisieoverzicht.
+
+**Nieuwe posts.** `create-page`, `create-query`, `create-query-card` en
+`create-entity`. Die maken iets aan in plaats van iets te wijzigen; terugdraaien
+is weggooien. `create-entity` schrijft bij een navigatie, header of element de
+hele set geregistreerde instellingen mee, omdat `set-entity-meta` alleen
+sleutels aanneemt die er al staan.
 
 **Post meta.** `set-entity-meta`, `set-card-layout`, `set-query` en
 `sync-query-facets`. WordPress bewaart post meta niet in revisies, dus de oude
@@ -33,7 +39,7 @@ kennen evenmin revisies. Ze zitten daarom achter een extra poort:
 alleen een vaste lijst sleutels — theme mods bevatten ook de header, de kleuren
 en de layout, en daar hoort een typefout niet in te kunnen landen.
 
-Alle zeventien vragen de capability `kadence_mcp_write` (bij installatie aan
+Alle achttien vragen de capability `kadence_mcp_write` (bij installatie aan
 niemand gegeven), het bijbehorende WordPress-recht, en een token uit een
 voorafgaande controlestap. Bestanden en caches worden nergens aangeraakt.
 

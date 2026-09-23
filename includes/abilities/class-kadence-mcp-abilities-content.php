@@ -1638,6 +1638,71 @@ class Kadence_MCP_Abilities_Content {
 		// onbruikbaar maken. Wat hier ontbrak was niet een verbod maar een
 		// waarschuwing: de meting kostte drie schrijfrondes voordat duidelijk
 		// was waar de 24px vandaan kwam.
+		// Ruimte tussen de kinderen van een Sectie. Kadence gebruikt gutter en
+		// rowGap alleen als de bijbehorende *Variable op "custom" staat
+		// (Kadence_Blocks_CSS::render_row_gap); anders geldt een preset
+		// (standaard "sm", 1rem) en wordt het getal stil genegeerd. Alleen bij
+		// een oude Sectie (kbVersion 1) die horizontaal staat leest Kadence
+		// gutter rechtstreeks. Gemeten op 23-09-2026: twintig Secties met
+		// gutter [12] kregen allemaal 1rem.
+		if ( ( 'gutter' === $attr || 'rowGap' === $attr ) && 'kadence/column' === $bloknaam && is_array( $nieuw ) ) {
+			$variabel = 'gutter' === $attr ? 'gutterVariable' : 'rowGapVariable';
+			$stand    = isset( $huidige[ $variabel ] ) && is_array( $huidige[ $variabel ] ) ? $huidige[ $variabel ] : array();
+			$richting = isset( $huidige['direction'][0] ) && '' !== $huidige['direction'][0] ? (string) $huidige['direction'][0] : 'vertical';
+			$oud_pad  = 'gutter' === $attr && ( ! isset( $huidige['kbVersion'] ) || (int) $huidige['kbVersion'] < 2 ) && 'horizontal' === $richting;
+			$genegeerd_op = array();
+
+			foreach ( array( 'desktop', 'tablet', 'mobiel' ) as $i => $naam ) {
+				if ( isset( $nieuw[ $i ] ) && is_numeric( $nieuw[ $i ] ) && ( ! isset( $stand[ $i ] ) || 'custom' !== $stand[ $i ] ) && ! $oud_pad ) {
+					$genegeerd_op[] = $naam;
+				}
+			}
+
+			if ( ! empty( $genegeerd_op ) ) {
+				$regel['level']   = 'blokkeer';
+				$regel['notes'][] = sprintf(
+					/* translators: 1: attribute, 2: companion attribute, 3: breakpoints. */
+					__( '%1$s doet niets zonder %2$s: Kadence gebruikt het getal alleen als %2$s op dezelfde plek "custom" is, en anders een preset (standaard "sm", 1rem). Geldt hier voor: %3$s. Zet %2$s in dezelfde aanroep mee, bijvoorbeeld ["custom","",""].', 'mcp-abilities-kadence' ),
+					$attr,
+					$variabel,
+					implode( ', ', $genegeerd_op )
+				);
+			}
+
+			if ( 'gutter' === $attr && 'vertical' === $richting ) {
+				$regel['notes'][] = __( 'let op: gutter is de ruimte NAAST elkaar (column-gap). In een verticale Sectie staan de kinderen onder elkaar, en daar is de ruimte ertussen rowGap, met rowGapVariable ["custom","",""].', 'mcp-abilities-kadence' );
+			}
+		}
+
+		// flexBasis staat op de OUDER: Kadence schrijft hem als
+		// flex-basis op elk kind (.kb-section-dir-horizontal > .kt-inside-inner-col > *).
+		// Wie één kolom een breedte wil geven, zet dus flexBasis op de verkeerde
+		// plek; maxWidth op het kind wordt in een horizontale Sectie flex: 0 1 {maxWidth}.
+		if ( 'flexBasis' === $attr && 'kadence/column' === $bloknaam && is_array( $nieuw ) && '' !== implode( '', array_map( 'strval', $nieuw ) ) ) {
+			$regel['notes'][] = __( 'let op: flexBasis geldt voor ALLE kinderen van deze Sectie (Kadence zet het als flex-basis op elk kind), en alleen als deze Sectie horizontaal staat. Eén kind een eigen breedte geven doe je met maxWidth op dat kind: in een horizontale Sectie wordt dat flex: 0 1 {maxWidth}.', 'mcp-abilities-kadence' );
+		}
+
+		// "transparent" als knopachtergrond werkt op de voorkant, maar de
+		// editor rendert die waarde niet en toont dan de themaknop
+		// (kb-btn-global-fill). rgba(0,0,0,0) werkt op allebei. Gemeten op
+		// 23-09-2026 in Kadence Blocks 3.7.11.
+		if ( 'kadence/singlebtn' === $bloknaam && in_array( $attr, array( 'background', 'backgroundHover' ), true ) && is_string( $nieuw ) && 'transparent' === strtolower( trim( $nieuw ) ) ) {
+			$regel['notes'][] = __( 'let op: "transparent" werkt op de voorkant, maar de editor rendert het niet en toont dan de kleur van de themaknop. Gebruik rgba(0,0,0,0): dat is op allebei doorzichtig.', 'mcp-abilities-kadence' );
+		}
+
+		// Het oude borderWidth naast borderStyle. Staat er een breedte in het
+		// oude attribuut, dan neemt de render dat pad: breedte wel, kleur niet
+		// (die zou uit het oude attribuut border komen). En bij het openen
+		// in de editor werd de breedte in borderStyle uit borderWidth
+		// overgenomen. Stabiel is: borderStyle met breedte, borderWidth leeg.
+		if ( 'kadence/column' === $bloknaam && in_array( $attr, array( 'borderWidth', 'borderStyle' ), true ) ) {
+			$oud_breed = isset( $huidige['borderWidth'] ) && is_array( $huidige['borderWidth'] ) && '' !== implode( '', array_map( 'strval', $huidige['borderWidth'] ) );
+
+			if ( $oud_breed ) {
+				$regel['notes'][] = __( 'let op: borderWidth is het oude randattribuut. Staat daar een breedte, dan rendert Kadence de rand via het oude pad: met die breedte maar zonder de kleur uit borderStyle (die zou uit het oude attribuut border komen). Zet de rand in borderStyle ([kleur, stijl, breedte] per zijde) en laat borderWidth leeg: ["","","",""]. Die combinatie blijft ook staan na opslaan in de editor.', 'mcp-abilities-kadence' );
+			}
+		}
+
 		if ( 'maxWidth' === $attr && 'kadence/column' === $bloknaam ) {
 			$leeg = ! is_array( $nieuw ) || '' === implode( '', array_map( 'strval', $nieuw ) );
 

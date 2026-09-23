@@ -8,7 +8,7 @@ description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kaden
 Deze skill beschrijft hoe je de Kadence MCP-server gebruikt zonder de fouten te
 maken die de toolschema's niet kunnen voorkomen.
 
-De server telt zesendertig abilities: negentien lezen, zeventien schrijven.
+De server telt zevenendertig abilities: negentien lezen, achttien schrijven.
 **Schrijven is dus geen uitzondering** — controleer per tool of hij schrijft, in
 plaats van ervan uit te gaan dat lezen de norm is.
 
@@ -687,8 +687,35 @@ Werkwijze van de ene omgeving naar de andere: `get-raw-markup` op de bron →
 
 Hangt er iets aan elkaar via post-ID's — een header met navigaties, een mega
 menu met kleinere menu's erin, een footer met een vector — maak dan eerst de
-doelposts aan op de doelsite (leeg), noteer hun ID's, en zet over van onder
-naar boven: eerst wat nergens naar verwijst.
+doelposts aan op de doelsite met **`create-entity`** (leeg, met de volledige set
+instellingen van Kadence), noteer hun ID's, en zet over van onder naar boven:
+eerst wat nergens naar verwijst. Daarna de instellingen met `set-entity-meta`,
+afgelezen met `get-post-meta` op de bron. Publiceer een element pas als de inhoud
+erin staat: een element op `replace_footer` vervangt de footer meteen.
+
+## Ruimte in een Sectie, en andere stille no-ops
+
+Kadence gebruikt `gutter` en `rowGap` op een Sectie alleen als
+`gutterVariable` en `rowGapVariable` op dezelfde plek `"custom"` staan; anders
+geldt een preset (1rem). `gutter` is bovendien de ruimte NAAST elkaar: in een
+verticale Sectie is de ruimte tussen de kinderen `rowGap`. `validate-write`
+blokkeert een getal zonder zijn *Variable, en `generate-section` zet het zelf
+goed (zie `notes` in het antwoord).
+
+Vier dingen die werken maar anders dan de naam belooft, gemeld door
+`validate-write` of `set-entity-meta`:
+
+| | wat er gebeurt | in plaats daarvan |
+|---|---|---|
+| `flexBasis` op een Sectie | geldt voor alle kinderen van die Sectie | `maxWidth` op het kind (wordt `flex: 0 1 …`) |
+| `background: "transparent"` op een knop | voorkant doorzichtig, editor toont de themaknop | `rgba(0,0,0,0)` |
+| `borderWidth` op een Sectie | het oude randpad: breedte zonder de kleur uit `borderStyle` | alleen `borderStyle` met breedte, `borderWidth` leeg |
+| `_kad_navigation_spacing` | standaard in em (`spacingUnit`), dus 20 wordt 340 px | `spacingUnit` op `px` meezetten |
+
+Een navigatie heeft in een pagina of header de vorm van een verwijzing
+(`kadence/navigation` met `id`, zelfsluitend); in de navigatiepost zelf staan de
+`kadence/navigation-link`-blokken erin. Allebei kan `generate-section` bouwen,
+net als `kadence/vector`.
 
 ## Via de editor bouwen (`wp.data`)
 
@@ -1048,7 +1075,7 @@ wijzigen op een bestaand blok.
 
 ## Grenzen
 
-- Zeventien abilities schrijven, alle met token of `expect_modified`. De
+- Achttien abilities schrijven, alle met token of `expect_modified`. De
   overige negentien zijn alleen-lezen. Ga niet af op de naam: `generate-section`,
   `prepare-import` en `preview-write` klinken als schrijvers maar slaan niets
   op, terwijl

@@ -98,6 +98,7 @@ class Kadence_MCP_Abilities_Build {
 							'markup'     => array( 'type' => 'string' ),
 							'unique_ids' => array( 'type' => 'array' ),
 							'blocks'     => array( 'type' => 'object' ),
+							'notes'      => array( 'type' => 'array' ),
 							'token'      => array( 'type' => 'string' ),
 							'status'     => array( 'type' => 'string' ),
 						),
@@ -433,6 +434,68 @@ class Kadence_MCP_Abilities_Build {
 				),
 			),
 			array(
+				'name' => 'kadence/create-entity',
+				'args' => array(
+					'label'       => __( 'Een Kadence-object aanmaken: navigatie, header, element of vector', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Maakt een lege kadence_navigation, kadence_header of kadence_element met de volledige set instellingen van Kadence, of een kadence_vector uit een SVG.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Maakt een nieuw Kadence-object aan, zodat je er daarna blokken in kunt zetten (prepare-import of generate-section, dan insert-blocks) en instellingen op kunt schrijven (set-entity-meta). Nodig bij het overzetten naar een andere omgeving: daar bestaan de navigaties, headers en elementen nog niet, en blokken die ernaar verwijzen hebben hun nieuwe ID nodig (post_map in prepare-import). Een navigatie, header of element wordt LEEG aangemaakt, maar met ALLE instellingen die Kadence voor dat posttype registreert, op hun standaardwaarde — anders weigert set-entity-meta ze later, omdat een sleutel die er niet staat een typefout of een onbekende instelling kan zijn. Met meta zet je meteen afwijkende instellingen (alleen sleutels die Kadence voor dit posttype registreert). Een vector wordt gemaakt uit svg, via de eigen route van Kadence (kb-vector/v1/vectors) en dus door de sanitizer van Kadence; die is altijd gepubliceerd. Status is standaard draft: een gepubliceerd element met een hook als replace_footer vervangt meteen de footer van de hele site, ook als het nog leeg is. Twee stappen: eerst zonder token voor een voorstel, daarna met token om aan te maken.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_type' => array(
+								'type'        => 'string',
+								'enum'        => array( 'kadence_navigation', 'kadence_header', 'kadence_element', 'kadence_vector' ),
+								'description' => __( 'Wat er gemaakt wordt. Een Query Loop of Query Card maak je met create-query en create-query-card.', 'mcp-abilities-kadence' ),
+							),
+							'title' => array(
+								'type'        => 'string',
+								'description' => __( 'De naam waarmee het object in het beheer en in de editor te kiezen is.', 'mcp-abilities-kadence' ),
+							),
+							'slug' => array(
+								'type'        => 'string',
+								'description' => __( 'Optioneel. Handig bij een element dat code op slug opzoekt: de slug is op elke omgeving gelijk, het ID niet.', 'mcp-abilities-kadence' ),
+							),
+							'status' => array(
+								'type'        => 'string',
+								'enum'        => array( 'draft', 'publish' ),
+								'default'     => 'draft',
+								'description' => __( 'draft (standaard) of publish. Niet van toepassing op een vector.', 'mcp-abilities-kadence' ),
+							),
+							'meta' => array(
+								'type'                 => 'object',
+								'additionalProperties' => true,
+								'description'          => __( 'Instellingen die afwijken van de standaard, bijvoorbeeld {"_kad_navigation_orientation":"vertical"} of {"_kad_element_hook":"replace_footer"}. Alleen sleutels die Kadence voor dit posttype registreert.', 'mcp-abilities-kadence' ),
+							),
+							'svg' => array(
+								'type'        => 'string',
+								'description' => __( 'Alleen bij kadence_vector: de SVG-code.', 'mcp-abilities-kadence' ),
+							),
+							'token' => array( 'type' => 'string' ),
+						),
+						'required'             => array( 'post_type', 'title' ),
+						'additionalProperties' => false,
+					),
+					'output_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_type' => array( 'type' => 'string' ),
+							'title'     => array( 'type' => 'string' ),
+							'status'    => array( 'type' => 'string' ),
+							'meta'      => array( 'type' => 'object' ),
+							'new_id'    => array( 'type' => 'integer' ),
+							'created'   => array( 'type' => 'boolean' ),
+							'token'     => array( 'type' => 'string' ),
+							'next'      => array( 'type' => 'string' ),
+							'note'      => array( 'type' => 'string' ),
+						),
+					),
+					'execute_callback' => array( __CLASS__, 'create_entity' ),
+				),
+			),
+			array(
 				'name' => 'kadence/set-page-status',
 				'args' => array(
 					'label'       => __( 'De status van een pagina wijzigen', 'mcp-abilities-kadence' ),
@@ -560,6 +623,7 @@ class Kadence_MCP_Abilities_Build {
 			'markup'     => $gebouwd['markup'],
 			'unique_ids' => $gebouwd['unique_ids'],
 			'blocks'     => (object) $gebouwd['blokken'],
+			'notes'      => isset( $gebouwd['notities'] ) ? $gebouwd['notities'] : array(),
 			'token'      => $token,
 			'status'     => __( 'Gebouwd en gecontroleerd, er is NIETS opgeslagen. De markup overleeft een parse- en serialiseerronde ongewijzigd. Lees hem na en geef hem met het token door aan insert-blocks om hem te plaatsen. Pas je de markup zelf aan, dan vervalt het token.', 'mcp-abilities-kadence' ),
 		);
@@ -2948,6 +3012,277 @@ class Kadence_MCP_Abilities_Build {
 						$status
 					)
 					: __( 'LET OP: de pagina is aangemaakt maar bij het teruglezen klopt het aantal blokken niet. Controleer hem.', 'mcp-abilities-kadence' ),
+			)
+		);
+	}
+
+	/**
+	 * Maak een Kadence-object aan.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function create_entity( $input = array() ) {
+		$type  = isset( $input['post_type'] ) ? (string) $input['post_type'] : '';
+		$titel = isset( $input['title'] ) ? trim( wp_strip_all_tags( (string) $input['title'] ) ) : '';
+		$slug  = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : '';
+		$meta  = isset( $input['meta'] ) && is_array( $input['meta'] ) ? $input['meta'] : array();
+		$svg   = isset( $input['svg'] ) ? (string) $input['svg'] : '';
+
+		if ( ! in_array( $type, array( 'kadence_navigation', 'kadence_header', 'kadence_element', 'kadence_vector' ), true ) ) {
+			return new WP_Error( 'kadence_mcp_bad_entity_type', __( 'post_type moet kadence_navigation, kadence_header, kadence_element of kadence_vector zijn.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( ! post_type_exists( $type ) ) {
+			return new WP_Error(
+				'kadence_mcp_entity_type_missing',
+				sprintf(
+					/* translators: %s: post type. */
+					__( 'Het posttype %s bestaat op deze site niet. Elementen komen uit Kadence Pro, de rest uit Kadence Blocks.', 'mcp-abilities-kadence' ),
+					$type
+				)
+			);
+		}
+
+		if ( '' === $titel ) {
+			return new WP_Error( 'kadence_mcp_no_title', __( 'Geef het object een titel.', 'mcp-abilities-kadence' ) );
+		}
+
+		$status = ( isset( $input['status'] ) && 'publish' === $input['status'] ) ? 'publish' : 'draft';
+
+		// De instellingen die Kadence voor dit posttype registreert, met hun
+		// standaard. Een Element registreert een deel zonder standaard; die
+		// krijgen de lege waarde van hun type, zodat ze er wel staan.
+		$standaard = array();
+
+		foreach ( get_registered_meta_keys( 'post', $type ) as $sleutel => $args ) {
+			if ( 0 !== strpos( (string) $sleutel, '_kad_' ) ) {
+				continue;
+			}
+
+			if ( array_key_exists( 'default', $args ) ) {
+				$standaard[ $sleutel ] = $args['default'];
+				continue;
+			}
+
+			$soort = isset( $args['type'] ) ? (string) $args['type'] : 'string';
+			$leeg  = array(
+				'string'  => '',
+				'integer' => 0,
+				'number'  => 0,
+				'boolean' => false,
+				'array'   => array(),
+				'object'  => array(),
+			);
+			$standaard[ $sleutel ] = isset( $leeg[ $soort ] ) ? $leeg[ $soort ] : '';
+		}
+
+		$onbekend = array_diff( array_keys( $meta ), array_keys( $standaard ) );
+
+		if ( ! empty( $onbekend ) ) {
+			return new WP_Error(
+				'kadence_mcp_bad_meta_key',
+				sprintf(
+					/* translators: 1: keys, 2: post type. */
+					__( 'Deze sleutels registreert Kadence niet voor %2$s: %1$s. Ze zouden opgeslagen worden en daarna genegeerd. Controleer de schrijfwijze met get-post-meta op een bestaand object.', 'mcp-abilities-kadence' ),
+					implode( ', ', $onbekend ),
+					$type
+				)
+			);
+		}
+
+		if ( 'kadence_vector' === $type ) {
+			if ( '' === trim( $svg ) || false === stripos( $svg, '<svg' ) ) {
+				return new WP_Error( 'kadence_mcp_no_svg', __( 'Een vector heeft svg nodig: de SVG-code.', 'mcp-abilities-kadence' ) );
+			}
+
+			if ( ! empty( $meta ) ) {
+				return new WP_Error( 'kadence_mcp_vector_meta', __( 'Een vector heeft geen instellingen; laat meta weg.', 'mcp-abilities-kadence' ) );
+			}
+
+			$status = 'publish';
+		}
+
+		$token     = isset( $input['token'] ) ? (string) $input['token'] : '';
+		$grondslag = 'kmcp1_' . substr(
+			wp_hash( (string) wp_json_encode( array( 'type' => $type, 'titel' => $titel, 'slug' => $slug, 'status' => $status, 'meta' => $meta, 'svg' => md5( $svg ) ) ) ),
+			0,
+			32
+		);
+
+		$rapport = array(
+			'post_type' => $type,
+			'title'     => $titel,
+			'status'    => $status,
+			'meta'      => (object) $meta,
+		);
+
+		if ( '' === $token ) {
+			return array_merge(
+				$rapport,
+				array(
+					'new_id'  => 0,
+					'created' => false,
+					'token'   => $grondslag,
+					'next'    => '',
+					'note'    => 'kadence_vector' === $type
+						? sprintf(
+							/* translators: %s: title. */
+							__( 'Voorstel, er is NIETS aangemaakt. Er zou een vector "%s" komen, via de route en de sanitizer van Kadence. Roep opnieuw aan met het token om hem te maken.', 'mcp-abilities-kadence' ),
+							$titel
+						)
+						: sprintf(
+							/* translators: 1: post type, 2: title, 3: number of settings, 4: number of overrides, 5: status. */
+							__( 'Voorstel, er is NIETS aangemaakt. Er zou een lege %1$s "%2$s" komen (%5$s), met alle %3$d instellingen van Kadence op hun standaard en %4$d daarvan anders. Roep opnieuw aan met het token om hem te maken.', 'mcp-abilities-kadence' ),
+							$type,
+							$titel,
+							count( $standaard ),
+							count( $meta ),
+							$status
+						),
+				)
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) ) {
+			return new WP_Error(
+				'kadence_mcp_write_denied',
+				__( 'Je hebt de capability kadence_mcp_write niet.', 'mcp-abilities-kadence' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		// De capability van het posttype zelf vragen, niet raden: Kadence geeft
+		// sommige van deze types eigen capabilities.
+		$type_object = get_post_type_object( $type );
+		$mag_maken   = ( $type_object && isset( $type_object->cap->create_posts ) ) ? (string) $type_object->cap->create_posts : 'edit_posts';
+
+		if ( ! current_user_can( $mag_maken ) ) {
+			return new WP_Error(
+				'kadence_mcp_create_denied',
+				sprintf(
+					/* translators: 1: capability, 2: post type. */
+					__( 'Je mist de capability "%1$s", die nodig is om een %2$s aan te maken.', 'mcp-abilities-kadence' ),
+					$mag_maken,
+					$type
+				),
+				array( 'status' => 403 )
+			);
+		}
+
+		if ( 'publish' === $status && 'kadence_vector' !== $type && $type_object && isset( $type_object->cap->publish_posts ) && ! current_user_can( $type_object->cap->publish_posts ) ) {
+			return new WP_Error( 'kadence_mcp_publish_denied', __( 'Je mag dit posttype niet publiceren. Laat status weg voor een concept.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( ! hash_equals( $grondslag, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer. Roep opnieuw zonder token aan en gebruik het token dat je dan terugkrijgt.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( 'kadence_vector' === $type ) {
+			// Via de route van Kadence zelf: die saneert de SVG en maakt de post
+			// zoals de editor dat doet. Een eigen wp_insert_post zou de
+			// sanitizer overslaan.
+			$verzoek = new WP_REST_Request( 'POST', '/kb-vector/v1/vectors' );
+			$verzoek->set_header( 'content-type', 'application/json' );
+			$verzoek->set_body( wp_json_encode( array( 'vectorSVG' => $svg, 'title' => $titel ) ) );
+
+			$antwoord = rest_do_request( $verzoek );
+			$data     = $antwoord->get_data();
+
+			if ( $antwoord->is_error() || ! is_array( $data ) || empty( $data['value'] ) ) {
+				return new WP_Error(
+					'kadence_mcp_vector_failed',
+					sprintf(
+						/* translators: %s: response. */
+						__( 'Kadence heeft de vector niet aangemaakt: %s', 'mcp-abilities-kadence' ),
+						wp_json_encode( $data )
+					)
+				);
+			}
+
+			$nieuw_id = (int) $data['value'];
+
+			if ( '' !== $slug ) {
+				wp_update_post( array( 'ID' => $nieuw_id, 'post_name' => $slug ) );
+			}
+
+			$controle = get_post( $nieuw_id );
+
+			return array_merge(
+				$rapport,
+				array(
+					'new_id'  => $nieuw_id,
+					'created' => (bool) $controle && '' !== trim( (string) $controle->post_content ),
+					'token'   => '',
+					'next'    => sprintf(
+						/* translators: %d: post ID. */
+						__( 'Plaats hem met een blok kadence/vector met id %d (generate-section kan dat blok bouwen).', 'mcp-abilities-kadence' ),
+						$nieuw_id
+					),
+					'note'    => __( 'Aangemaakt via de route van Kadence; de inhoud is door de sanitizer van Kadence gegaan. Controleer de vector in de editor als er iets aan ontbreekt.', 'mcp-abilities-kadence' ),
+				)
+			);
+		}
+
+		$nieuw_id = wp_insert_post(
+			array(
+				'post_type'    => $type,
+				'post_status'  => $status,
+				'post_title'   => $titel,
+				'post_name'    => $slug,
+				'post_content' => '',
+			),
+			true
+		);
+
+		if ( is_wp_error( $nieuw_id ) ) {
+			return $nieuw_id;
+		}
+
+		foreach ( array_merge( $standaard, $meta ) as $sleutel => $waarde ) {
+			update_post_meta( $nieuw_id, $sleutel, $waarde );
+		}
+
+		clean_post_cache( $nieuw_id );
+
+		// Teruglezen: staat de hele set, en de afwijkingen zoals bedoeld?
+		$mist = array();
+
+		foreach ( array_merge( $standaard, $meta ) as $sleutel => $waarde ) {
+			if ( ! metadata_exists( 'post', $nieuw_id, $sleutel ) ) {
+				$mist[] = $sleutel;
+			} elseif ( isset( $meta[ $sleutel ] ) && wp_json_encode( get_post_meta( $nieuw_id, $sleutel, true ) ) !== wp_json_encode( $meta[ $sleutel ] ) ) {
+				$mist[] = $sleutel;
+			}
+		}
+
+		$volgende = array(
+			'kadence_navigation' => __( 'Zet de menu-items erin met insert-blocks: één kadence/navigation-blok met de kadence/navigation-link-blokken erin (prepare-import met de markup van de bron, of generate-section). Plaats de navigatie daarna met een blok kadence/navigation met dit id.', 'mcp-abilities-kadence' ),
+			'kadence_header'     => __( 'Zet de header erin met insert-blocks: één kadence/header-blok met zijn containers (prepare-import met de markup van de bron). Toewijzen gebeurt in de Customizer: Header, Header block.', 'mcp-abilities-kadence' ),
+			'kadence_element'    => __( 'Zet de inhoud erin met insert-blocks. De plaatsing (hook, weergaveregels) staat in de meta; wijzigen met set-entity-meta. Publiceer pas als de inhoud er staat.', 'mcp-abilities-kadence' ),
+		);
+
+		return array_merge(
+			$rapport,
+			array(
+				'new_id'  => (int) $nieuw_id,
+				'created' => empty( $mist ),
+				'token'   => '',
+				'next'    => $volgende[ $type ],
+				'note'    => empty( $mist )
+					? sprintf(
+						/* translators: 1: post type, 2: ID, 3: number of settings. */
+						__( 'Aangemaakt: %1$s %2$d, met %3$d instellingen. Teruggelezen: alles staat er.', 'mcp-abilities-kadence' ),
+						$type,
+						(int) $nieuw_id,
+						count( $standaard )
+					)
+					: sprintf(
+						/* translators: %s: keys. */
+						__( 'LET OP: aangemaakt, maar bij het teruglezen ontbreken of wijken af: %s.', 'mcp-abilities-kadence' ),
+						implode( ', ', $mist )
+					),
 			)
 		);
 	}

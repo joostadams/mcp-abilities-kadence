@@ -392,6 +392,36 @@ class Kadence_MCP_Profielen {
 			'kadence/query-sort'          => array( 'zelfsluitend' => true ),
 			'kadence/query-pagination'    => array( 'zelfsluitend' => true ),
 			'kadence/query-noresults'     => array( 'open' => '', 'sluit' => '' ),
+
+			// Vector SVG. Afgelezen van pagina 6 en de footer-Element, 23-09-2026
+			// (Kadence Blocks 3.7.11), ook na opslaan in de editor: altijd
+			// zelfsluitend. De SVG staat niet in de markup maar in een
+			// kadence_vector-post waar id naar wijst; de render zet hem letterlijk
+			// neer.
+			'kadence/vector' => array(
+				'zelfsluitend' => true,
+				'let_op'       => 'De SVG staat in een kadence_vector-post (id). Aanmaken via de REST-route kb-vector/v1/vectors of de editor; de inhoud gaat door de sanitizer van Kadence. Anders dan een custom icoon (kb-custom-N) blijven fill en stroke staan, dus lijniconen blijven lijnen. Zonder align wordt hij gecentreerd.',
+			),
+
+			// Navigatie. Twee gedaanten, net als kadence/query: in een pagina of
+			// header is het een VERWIJZING met id naar een kadence_navigation-post
+			// en dus leeg; in die post zelf staan de menu-items er rechtstreeks
+			// tussen, zonder eigen HTML. Afgelezen van header 171 en navigatie 183,
+			// 23-09-2026. Het uiterlijk (kleuren, spacing, dropdown) staat in meta
+			// van de navigatiepost, niet in het blok.
+			'kadence/navigation' => array(
+				'open'   => '',
+				'sluit'  => '',
+				'let_op' => 'Het uiterlijk staat in post meta van de kadence_navigation-post (_kad_navigation_*), te zetten met set-entity-meta. spacing is [rij-gap, kolom-gap, …] en staat standaard in em (_kad_navigation_spacingUnit). Een nieuwe navigatie maak je met create-entity.',
+			),
+			// Een menu-item. Geen eigen HTML: de render bouwt het li-element. Met
+			// kinderen (een submenu, of een rowlayout als mega menu) staan die er
+			// rechtstreeks tussen; zonder kinderen is hij zelfsluitend.
+			'kadence/navigation-link' => array(
+				'open'   => '',
+				'sluit'  => '',
+				'let_op' => 'kind post-type met type en id koppelt het item aan een post, zodat de url meeloopt met de slug; kind custom met url is een vrije link. isMegaMenu met een kadence/rowlayout als kind maakt een mega menu; megaMenuWidth custom met megaMenuCustomWidth zet de breedte. Hoort in een kadence/navigation.',
+			),
 		);
 	}
 
