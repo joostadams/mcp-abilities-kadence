@@ -8,7 +8,7 @@ description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kaden
 Deze skill beschrijft hoe je de Kadence MCP-server gebruikt zonder de fouten te
 maken die de toolschema's niet kunnen voorkomen.
 
-De server telt zevenendertig abilities: negentien lezen, achttien schrijven.
+De server telt achtendertig abilities: negentien lezen, negentien schrijven.
 **Schrijven is dus geen uitzondering** — controleer per tool of hij schrijft, in
 plaats van ervan uit te gaan dat lezen de norm is.
 
@@ -692,6 +692,15 @@ instellingen van Kadence), noteer hun ID's, en zet over van onder naar boven:
 eerst wat nergens naar verwijst. Daarna de instellingen met `set-entity-meta`,
 afgelezen met `get-post-meta` op de bron. Publiceer een element pas als de inhoud
 erin staat: een element op `replace_footer` vervangt de footer meteen.
+
+Gewone posts — diensten, markten, berichten — gaan niet als markup maar met
+**`create-post`**: titel, volgorde, uitgelichte afbeelding (een media-ID van de
+doelsite), termen op slug, en ACF-velden op veldnaam. Hij toetst alles tegen het
+posttype en weigert wat daar niet bij hoort. Relatievelden wijzen naar post-ID's
+van de doelsite: maak dus eerst de posts waar andere naar verwijzen. Verwijzen
+posts over en weer naar elkaar (diensten onderling), dan kan één kant pas later,
+en dat gaat niet met `create-post` — die maakt aan, hij wijzigt niet. De nieuwe ID's gaan vervolgens in `post_map` van
+`prepare-import`.
 
 ## Ruimte in een Sectie, en andere stille no-ops
 

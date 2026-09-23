@@ -21,11 +21,14 @@ valt.
 WordPress maakt er een revisie van, dus terugdraaien kan via het
 revisieoverzicht.
 
-**Nieuwe posts.** `create-page`, `create-query`, `create-query-card` en
-`create-entity`. Die maken iets aan in plaats van iets te wijzigen; terugdraaien
+**Nieuwe posts.** `create-page`, `create-post`, `create-query`,
+`create-query-card` en `create-entity`. Die maken iets aan in plaats van iets te wijzigen; terugdraaien
 is weggooien. `create-entity` schrijft bij een navigatie, header of element de
 hele set geregistreerde instellingen mee, omdat `set-entity-meta` alleen
-sleutels aanneemt die er al staan.
+sleutels aanneemt die er al staan. `create-post` is één ability voor alle
+gewone posttypes: wat per type mag (taxonomieën, thumbnail, excerpt,
+ACF-veldgroepen) leest hij per aanroep uit WordPress, in plaats van een variant
+per posttype.
 
 **Post meta.** `set-entity-meta`, `set-card-layout`, `set-query` en
 `sync-query-facets`. WordPress bewaart post meta niet in revisies, dus de oude

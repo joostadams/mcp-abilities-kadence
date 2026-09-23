@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.23.1
+Stable tag: 1.24.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,16 +12,16 @@ Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema uitlezen en
 
 == Description ==
 
-Zevenendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
+Achtendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
 de Kadence-opbouw van een site kan uitlezen en gericht kan wijzigen: welke
 blokken er zijn, welke attributen die hebben, hoe een pagina is opgebouwd,
 welke headers en elementen er staan, en welk kleurenpalet er geldt.
 
-Negentien daarvan zijn alleen-lezen. Achttien schrijven: set-attributes,
+Negentien daarvan zijn alleen-lezen. Negentien schrijven: set-attributes,
 style-blocks, set-text, insert-blocks, remove-blocks, duplicate-blocks,
-replace-block, create-page, create-entity, set-page-status, create-query, create-query-card,
+replace-block, create-page, create-entity, create-post, set-page-status, create-query, create-query-card,
 set-query, sync-query-facets, set-card-layout, set-entity-meta,
-set-global-typography en set-site-css. Ze vragen alle achttien een eigen capability (kadence_mcp_write, die na installatie aan
+set-global-typography en set-site-css. Ze vragen alle negentien een eigen capability (kadence_mcp_write, die na installatie aan
 niemand is toegekend), bewerkrecht op de post volgens WordPress, en een token
 uit een voorafgaande controlestap. Na elke schrijfactie wordt de post
 teruggelezen en vergeleken met wat er bedoeld was.
@@ -38,6 +38,9 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.24.0 =
+* Nieuw: kadence/create-post. Maakt een post van elk publiek posttype dat in de REST-API staat — een bericht of een eigen posttype zoals een dienst of markt — met titel, slug, samenvatting, volgorde, uitgelichte afbeelding, termen, ACF-velden en optioneel blokmarkup. Eén ability voor alle posttypes: wat per type verschilt wordt per aanroep uit WordPress gelezen en getoetst. Een samenvatting of afbeelding op een type dat die niet ondersteunt, een taxonomie die niet aan het type hangt, een term die niet bestaat, een ACF-veld buiten de veldgroepen van het type, een onbekend subveld in een repeater of een relatie naar een post van een niet-toegestaan type wordt geweigerd, met de namen die wél kunnen. ACF-velden worden op veldsleutel opgeslagen, zodat ACF ze op een nieuwe post herkent. Pagina's, bijlagen en de posttypes van Kadence blijven bij hun eigen ability. Standaard een concept; twee stappen met token; na afloop teruggelezen.
 
 = 1.23.1 =
 * Gecorrigeerd: describe-post-type gaf een fout ("output[sample] is not of type object") bij een posttype zonder gepubliceerde posts. sample is dan null, en het uitvoerschema stond dat niet toe. Juist bij een nieuwe omgeving, waar de posttypes er wel zijn maar nog leeg, was de tool daardoor onbruikbaar.

@@ -496,6 +496,59 @@ class Kadence_MCP_Abilities_Build {
 				),
 			),
 			array(
+				'name' => 'kadence/create-post',
+				'args' => array(
+					'label'       => __( 'Een bericht of een post van een eigen posttype aanmaken', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Maakt een post van elk publiek posttype (een bericht, een dienst, een markt …) met titel, samenvatting, volgorde, uitgelichte afbeelding, termen en ACF-velden; alles wordt tegen het posttype getoetst.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Maakt één post aan van een posttype dat op deze site bestaat en in de REST-API staat: post of een eigen posttype. Niet voor pagina\'s (create-page), bijlagen, of de posttypes van Kadence zelf (create-entity, create-query, create-query-card). Eén ability voor alle posttypes, omdat wat per type verschilt in WordPress zelf staat en hier per aanroep wordt uitgelezen en getoetst: excerpt, menu_order en featured_image alleen als het posttype dat ondersteunt; terms alleen voor taxonomieën die aan dit posttype hangen, met termen die bestaan (op slug of ID); acf alleen voor velden uit een ACF-veldgroep die op dit posttype geldt, op veldnaam, en een relatieveld alleen met ID\'s van bestaande posts van een toegestaan type. Wat niet klopt wordt geweigerd in plaats van stil opgeslagen. content is optioneel blokmarkup en gaat door dezelfde parse- en serialiseercontrole als create-page. Standaard een concept. Bij het overzetten naar een andere omgeving: maak eerst de posts waar andere naar verwijzen, en gebruik hun nieuwe ID\'s in post_map van prepare-import. Twee stappen: eerst zonder token voor een voorstel, daarna met token om aan te maken.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_type'      => array( 'type' => 'string', 'description' => __( 'Het posttype, bijvoorbeeld post, service of market.', 'mcp-abilities-kadence' ) ),
+							'title'          => array( 'type' => 'string' ),
+							'slug'           => array( 'type' => 'string', 'description' => __( 'Optioneel; anders maakt WordPress hem uit de titel.', 'mcp-abilities-kadence' ) ),
+							'status'         => array( 'type' => 'string', 'enum' => array( 'draft', 'publish' ), 'default' => 'draft' ),
+							'excerpt'        => array( 'type' => 'string' ),
+							'content'        => array( 'type' => 'string', 'description' => __( 'Optioneel: blokmarkup, bij voorkeur uit generate-section of prepare-import.', 'mcp-abilities-kadence' ) ),
+							'menu_order'     => array( 'type' => 'integer' ),
+							'featured_image' => array( 'type' => 'integer', 'minimum' => 1, 'description' => __( 'Het ID van een bijlage op DEZE site.', 'mcp-abilities-kadence' ) ),
+							'terms'          => array(
+								'type'                 => 'object',
+								'additionalProperties' => array( 'type' => 'array' ),
+								'description'          => __( 'Per taxonomie een lijst termen, op slug of ID: {"service_type":["transport-mode"]}.', 'mcp-abilities-kadence' ),
+							),
+							'acf'            => array(
+								'type'                 => 'object',
+								'additionalProperties' => true,
+								'description'          => __( 'ACF-velden op veldnaam: {"intro":"…","key_points":[{"text":"…"}]}. Een repeater is een lijst rijen met de namen van de subvelden; een relatieveld een lijst post-ID\'s op deze site.', 'mcp-abilities-kadence' ),
+							),
+							'token'          => array( 'type' => 'string' ),
+						),
+						'required'             => array( 'post_type', 'title' ),
+						'additionalProperties' => false,
+					),
+					'output_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_type' => array( 'type' => 'string' ),
+							'title'     => array( 'type' => 'string' ),
+							'status'    => array( 'type' => 'string' ),
+							'plan'      => array( 'type' => 'object' ),
+							'new_id'    => array( 'type' => 'integer' ),
+							'url'       => array( 'type' => 'string' ),
+							'created'   => array( 'type' => 'boolean' ),
+							'mismatch'  => array( 'type' => 'array' ),
+							'token'     => array( 'type' => 'string' ),
+							'note'      => array( 'type' => 'string' ),
+						),
+					),
+					'execute_callback' => array( __CLASS__, 'create_post' ),
+				),
+			),
+			array(
 				'name' => 'kadence/set-page-status',
 				'args' => array(
 					'label'       => __( 'De status van een pagina wijzigen', 'mcp-abilities-kadence' ),
@@ -3285,6 +3338,423 @@ class Kadence_MCP_Abilities_Build {
 					),
 			)
 		);
+	}
+
+	/**
+	 * Maak een post van een publiek posttype.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function create_post( $input = array() ) {
+		$type  = isset( $input['post_type'] ) ? sanitize_key( (string) $input['post_type'] ) : '';
+		$titel = isset( $input['title'] ) ? trim( wp_strip_all_tags( (string) $input['title'] ) ) : '';
+
+		$object = $type ? get_post_type_object( $type ) : null;
+
+		if ( ! $object ) {
+			return new WP_Error(
+				'kadence_mcp_unknown_post_type',
+				sprintf(
+					/* translators: %s: post type. */
+					__( 'Het posttype "%s" bestaat op deze site niet.', 'mcp-abilities-kadence' ),
+					$type
+				)
+			);
+		}
+
+		// Wat hier niet hoort heeft een eigen ability, met eigen controles.
+		$elders = array(
+			'page'               => 'create-page',
+			'attachment'         => __( 'de mediabibliotheek', 'mcp-abilities-kadence' ),
+			'kadence_navigation' => 'create-entity',
+			'kadence_header'     => 'create-entity',
+			'kadence_element'    => 'create-entity',
+			'kadence_vector'     => 'create-entity',
+			'kadence_query'      => 'create-query',
+			'kadence_query_card' => 'create-query-card',
+		);
+
+		if ( isset( $elders[ $type ] ) || 0 === strpos( $type, 'wp_' ) || 0 === strpos( $type, 'kadence_' ) || ! $object->show_in_rest ) {
+			return new WP_Error(
+				'kadence_mcp_post_type_elsewhere',
+				isset( $elders[ $type ] )
+					? sprintf(
+						/* translators: 1: post type, 2: where to go instead. */
+						__( '%1$s maak je niet hier maar met %2$s.', 'mcp-abilities-kadence' ),
+						$type,
+						$elders[ $type ]
+					)
+					: sprintf(
+						/* translators: %s: post type. */
+						__( '%s is een intern posttype of staat niet in de REST-API; dat maakt deze ability niet aan.', 'mcp-abilities-kadence' ),
+						$type
+					)
+			);
+		}
+
+		if ( '' === $titel ) {
+			return new WP_Error( 'kadence_mcp_no_title', __( 'Geef de post een titel.', 'mcp-abilities-kadence' ) );
+		}
+
+		$status = ( isset( $input['status'] ) && 'publish' === $input['status'] ) ? 'publish' : 'draft';
+		$bezwaren = array();
+		$plan     = array();
+
+		// Samenvatting, volgorde, uitgelichte afbeelding: alleen als het type
+		// het ondersteunt. Anders slaat WordPress het op en toont het nergens.
+		if ( isset( $input['excerpt'] ) ) {
+			if ( ! post_type_supports( $type, 'excerpt' ) ) {
+				$bezwaren[] = sprintf( __( '%s ondersteunt geen samenvatting (excerpt).', 'mcp-abilities-kadence' ), $type );
+			}
+			$plan['excerpt'] = (string) $input['excerpt'];
+		}
+
+		if ( isset( $input['menu_order'] ) ) {
+			if ( ! post_type_supports( $type, 'page-attributes' ) && ! $object->hierarchical ) {
+				$plan['menu_order_note'] = __( 'dit posttype heeft geen veld Volgorde in de editor; menu_order wordt wel opgeslagen en werkt in een query op menu_order.', 'mcp-abilities-kadence' );
+			}
+			$plan['menu_order'] = (int) $input['menu_order'];
+		}
+
+		if ( isset( $input['featured_image'] ) ) {
+			$bijlage = get_post( (int) $input['featured_image'] );
+
+			if ( ! post_type_supports( $type, 'thumbnail' ) ) {
+				$bezwaren[] = sprintf( __( '%s ondersteunt geen uitgelichte afbeelding.', 'mcp-abilities-kadence' ), $type );
+			} elseif ( ! $bijlage || 'attachment' !== $bijlage->post_type || ! wp_attachment_is_image( $bijlage ) ) {
+				$bezwaren[] = sprintf( __( 'Bijlage %d bestaat hier niet of is geen afbeelding. Media-ID\'s verschillen per site: upload het bestand hier en gebruik dat ID.', 'mcp-abilities-kadence' ), (int) $input['featured_image'] );
+			} else {
+				$plan['featured_image'] = array( 'id' => (int) $bijlage->ID, 'file' => basename( (string) get_attached_file( $bijlage->ID ) ) );
+			}
+		}
+
+		// Termen: taxonomie moet aan dit type hangen, term moet bestaan.
+		$termen = array();
+
+		if ( ! empty( $input['terms'] ) && is_array( $input['terms'] ) ) {
+			$eigen = get_object_taxonomies( $type );
+
+			foreach ( $input['terms'] as $taxonomie => $lijst ) {
+				if ( ! in_array( $taxonomie, $eigen, true ) ) {
+					$bezwaren[] = sprintf(
+						/* translators: 1: taxonomy, 2: post type, 3: list. */
+						__( 'De taxonomie %1$s hangt niet aan %2$s (wel: %3$s). Een term daarin toont op deze post nergens.', 'mcp-abilities-kadence' ),
+						$taxonomie,
+						$type,
+						$eigen ? implode( ', ', $eigen ) : __( 'geen', 'mcp-abilities-kadence' )
+					);
+					continue;
+				}
+
+				foreach ( (array) $lijst as $term ) {
+					$gevonden = is_numeric( $term ) ? get_term( (int) $term, $taxonomie ) : get_term_by( 'slug', (string) $term, $taxonomie );
+
+					if ( ! $gevonden || is_wp_error( $gevonden ) ) {
+						$bezwaren[] = sprintf(
+							/* translators: 1: term, 2: taxonomy. */
+							__( 'Term "%1$s" bestaat niet in %2$s. Term-ID\'s verschillen per site; een slug is hier betrouwbaarder.', 'mcp-abilities-kadence' ),
+							(string) $term,
+							$taxonomie
+						);
+						continue;
+					}
+
+					$termen[ $taxonomie ][] = (int) $gevonden->term_id;
+					$plan['terms'][ $taxonomie ][] = $gevonden->slug;
+				}
+			}
+		}
+
+		// ACF: alleen velden uit een veldgroep die op dit posttype geldt.
+		$acf_velden = array();
+
+		if ( ! empty( $input['acf'] ) && is_array( $input['acf'] ) ) {
+			if ( ! function_exists( 'acf_get_field_groups' ) || ! function_exists( 'update_field' ) ) {
+				$bezwaren[] = __( 'ACF is op deze site niet actief, dus acf kan niet worden opgeslagen.', 'mcp-abilities-kadence' );
+			} else {
+				$bekend = array();
+
+				foreach ( acf_get_field_groups( array( 'post_type' => $type ) ) as $groep ) {
+					foreach ( (array) acf_get_fields( $groep ) as $veld ) {
+						if ( ! empty( $veld['name'] ) ) {
+							$bekend[ $veld['name'] ] = $veld;
+						}
+					}
+				}
+
+				foreach ( $input['acf'] as $naam => $waarde ) {
+					if ( ! isset( $bekend[ $naam ] ) ) {
+						$bezwaren[] = sprintf(
+							/* translators: 1: field, 2: post type, 3: list. */
+							__( 'Het ACF-veld "%1$s" hoort bij geen veldgroep op %2$s. Bekend: %3$s.', 'mcp-abilities-kadence' ),
+							$naam,
+							$type,
+							$bekend ? implode( ', ', array_keys( $bekend ) ) : __( 'geen', 'mcp-abilities-kadence' )
+						);
+						continue;
+					}
+
+					$veld  = $bekend[ $naam ];
+					$fout  = self::toets_acf_waarde( $veld, $waarde );
+
+					if ( '' !== $fout ) {
+						$bezwaren[] = $fout;
+						continue;
+					}
+
+					$acf_velden[ $naam ] = array( 'key' => $veld['key'], 'value' => $waarde, 'type' => $veld['type'] );
+					$plan['acf'][ $naam ] = $veld['type'];
+				}
+			}
+		}
+
+		// Inhoud: dezelfde rondgang als create-page.
+		$markup = isset( $input['content'] ) ? (string) $input['content'] : '';
+
+		if ( '' !== trim( $markup ) ) {
+			$blokken = Kadence_MCP_Inventory::schoon_blokken( parse_blocks( $markup ) );
+			$schoon  = Kadence_MCP_Inventory::serialiseer( $blokken );
+
+			if ( empty( $blokken ) || Kadence_MCP_Inventory::serialiseer( parse_blocks( $schoon ) ) !== $schoon ) {
+				$bezwaren[] = __( 'De inhoud is geen stabiele blokmarkup: hij levert geen blokken op of overleeft een parse- en serialiseerronde niet.', 'mcp-abilities-kadence' );
+			} else {
+				$markup = $schoon;
+				$plan['content_blocks'] = count( $blokken );
+			}
+		}
+
+		if ( ! empty( $bezwaren ) ) {
+			return new WP_Error( 'kadence_mcp_create_post_invalid', implode( ' ', $bezwaren ) );
+		}
+
+		$slug      = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : '';
+		$token     = isset( $input['token'] ) ? (string) $input['token'] : '';
+		$grondslag = 'kmcp1_' . substr(
+			wp_hash( (string) wp_json_encode( array( $type, $titel, $slug, $status, $markup, $plan, isset( $input['acf'] ) ? $input['acf'] : array() ) ) ),
+			0,
+			32
+		);
+
+		$rapport = array(
+			'post_type' => $type,
+			'title'     => $titel,
+			'status'    => $status,
+			'plan'      => (object) $plan,
+		);
+
+		if ( '' === $token ) {
+			return array_merge(
+				$rapport,
+				array(
+					'new_id'   => 0,
+					'url'      => '',
+					'created'  => false,
+					'mismatch' => array(),
+					'token'    => $grondslag,
+					'note'     => sprintf(
+						/* translators: 1: post type, 2: title, 3: status. */
+						__( 'Voorstel, er is NIETS aangemaakt. Er zou een %1$s "%2$s" komen (%3$s), met wat onder plan staat; alles is tegen dit posttype getoetst. Roep opnieuw aan met het token om hem te maken.', 'mcp-abilities-kadence' ),
+						$type,
+						$titel,
+						$status
+					),
+				)
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) ) {
+			return new WP_Error( 'kadence_mcp_write_denied', __( 'Je hebt de capability kadence_mcp_write niet.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		$mag_maken = isset( $object->cap->create_posts ) ? (string) $object->cap->create_posts : 'edit_posts';
+
+		if ( ! current_user_can( $mag_maken ) ) {
+			return new WP_Error(
+				'kadence_mcp_create_denied',
+				sprintf( __( 'Je mist de capability "%1$s", die nodig is om een %2$s aan te maken.', 'mcp-abilities-kadence' ), $mag_maken, $type ),
+				array( 'status' => 403 )
+			);
+		}
+
+		if ( 'publish' === $status && isset( $object->cap->publish_posts ) && ! current_user_can( $object->cap->publish_posts ) ) {
+			return new WP_Error( 'kadence_mcp_publish_denied', __( 'Je mag dit posttype niet publiceren. Laat status weg voor een concept.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( ! hash_equals( $grondslag, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer. Roep opnieuw zonder token aan en gebruik het token dat je dan terugkrijgt.', 'mcp-abilities-kadence' ) );
+		}
+
+		$nieuw_id = wp_insert_post(
+			array(
+				'post_type'    => $type,
+				'post_status'  => $status,
+				'post_title'   => $titel,
+				'post_name'    => $slug,
+				'post_excerpt' => isset( $plan['excerpt'] ) ? $plan['excerpt'] : '',
+				'menu_order'   => isset( $plan['menu_order'] ) ? $plan['menu_order'] : 0,
+				'post_content' => wp_slash( $markup ),
+			),
+			true
+		);
+
+		if ( is_wp_error( $nieuw_id ) ) {
+			return $nieuw_id;
+		}
+
+		if ( isset( $plan['featured_image'] ) ) {
+			set_post_thumbnail( $nieuw_id, $plan['featured_image']['id'] );
+		}
+
+		foreach ( $termen as $taxonomie => $ids ) {
+			wp_set_object_terms( $nieuw_id, $ids, $taxonomie );
+		}
+
+		// Op veldsleutel en niet op naam: bij een nieuwe post bestaat er nog
+		// geen verwijzing van naam naar sleutel, en dan slaat ACF op naam een
+		// waarde op die zijn eigen velden daarna niet herkennen.
+		foreach ( $acf_velden as $naam => $veld ) {
+			update_field( $veld['key'], $veld['value'], $nieuw_id );
+		}
+
+		clean_post_cache( $nieuw_id );
+
+		// Teruglezen.
+		$afwijking = array();
+		$controle  = get_post( $nieuw_id );
+
+		if ( ! $controle || $controle->post_title !== $titel ) {
+			$afwijking[] = 'title';
+		}
+
+		if ( isset( $plan['featured_image'] ) && (int) get_post_thumbnail_id( $nieuw_id ) !== $plan['featured_image']['id'] ) {
+			$afwijking[] = 'featured_image';
+		}
+
+		foreach ( $termen as $taxonomie => $ids ) {
+			$staat = wp_get_object_terms( $nieuw_id, $taxonomie, array( 'fields' => 'ids' ) );
+			if ( is_wp_error( $staat ) || array_diff( $ids, array_map( 'intval', $staat ) ) ) {
+				$afwijking[] = 'terms:' . $taxonomie;
+			}
+		}
+
+		foreach ( $acf_velden as $naam => $veld ) {
+			$terug = get_field( $veld['key'], $nieuw_id, false );
+
+			if ( empty( $terug ) && ! empty( $veld['value'] ) ) {
+				$afwijking[] = 'acf:' . $naam;
+			}
+		}
+
+		return array_merge(
+			$rapport,
+			array(
+				'new_id'   => (int) $nieuw_id,
+				'url'      => (string) get_permalink( $nieuw_id ),
+				'created'  => true,
+				'mismatch' => $afwijking,
+				'token'    => '',
+				'note'     => empty( $afwijking )
+					? sprintf(
+						/* translators: 1: post type, 2: ID, 3: status. */
+						__( 'Aangemaakt: %1$s %2$d (%3$s). Teruggelezen: titel, afbeelding, termen en ACF-velden staan zoals bedoeld.', 'mcp-abilities-kadence' ),
+						$type,
+						(int) $nieuw_id,
+						$status
+					)
+					: sprintf(
+						/* translators: %s: fields. */
+						__( 'LET OP: aangemaakt, maar bij het teruglezen wijkt dit af: %s.', 'mcp-abilities-kadence' ),
+						implode( ', ', $afwijking )
+					),
+			)
+		);
+	}
+
+	/**
+	 * Past een waarde bij het type ACF-veld? Alleen wat eenduidig te toetsen
+	 * is; de rest laat ACF zelf afhandelen.
+	 *
+	 * @param array $veld   Het veld.
+	 * @param mixed $waarde De waarde.
+	 *
+	 * @return string Leeg als het past, anders de reden.
+	 */
+	private static function toets_acf_waarde( $veld, $waarde ) {
+		$naam = (string) $veld['name'];
+
+		switch ( $veld['type'] ) {
+			case 'text':
+			case 'textarea':
+			case 'wysiwyg':
+			case 'email':
+			case 'url':
+				return is_scalar( $waarde ) ? '' : sprintf( __( 'ACF-veld "%s" verwacht tekst.', 'mcp-abilities-kadence' ), $naam );
+
+			case 'number':
+				return is_numeric( $waarde ) ? '' : sprintf( __( 'ACF-veld "%s" verwacht een getal.', 'mcp-abilities-kadence' ), $naam );
+
+			case 'repeater':
+				if ( ! is_array( $waarde ) ) {
+					return sprintf( __( 'ACF-repeater "%s" verwacht een lijst rijen.', 'mcp-abilities-kadence' ), $naam );
+				}
+
+				$subs = wp_list_pluck( isset( $veld['sub_fields'] ) ? (array) $veld['sub_fields'] : array(), 'name' );
+
+				foreach ( $waarde as $rij ) {
+					if ( ! is_array( $rij ) ) {
+						return sprintf( __( 'ACF-repeater "%s": elke rij is een object met de namen van de subvelden.', 'mcp-abilities-kadence' ), $naam );
+					}
+
+					$vreemd = array_diff( array_keys( $rij ), $subs );
+
+					if ( $vreemd ) {
+						return sprintf(
+							/* translators: 1: field, 2: unknown, 3: known. */
+							__( 'ACF-repeater "%1$s" kent de subvelden %2$s niet (wel: %3$s).', 'mcp-abilities-kadence' ),
+							$naam,
+							implode( ', ', $vreemd ),
+							implode( ', ', $subs )
+						);
+					}
+				}
+
+				return '';
+
+			case 'relationship':
+			case 'post_object':
+				$ids       = is_array( $waarde ) ? $waarde : array( $waarde );
+				$toegestaan = isset( $veld['post_type'] ) ? array_filter( (array) $veld['post_type'] ) : array();
+
+				foreach ( $ids as $id ) {
+					$doel = is_numeric( $id ) ? get_post( (int) $id ) : null;
+
+					if ( ! $doel ) {
+						return sprintf(
+							/* translators: 1: field, 2: ID. */
+							__( 'ACF-relatieveld "%1$s": post %2$s bestaat hier niet. Post-ID\'s verschillen per site; maak die post eerst aan en gebruik het nieuwe ID.', 'mcp-abilities-kadence' ),
+							$naam,
+							(string) $id
+						);
+					}
+
+					if ( $toegestaan && ! in_array( $doel->post_type, $toegestaan, true ) ) {
+						return sprintf(
+							/* translators: 1: field, 2: ID, 3: type, 4: allowed. */
+							__( 'ACF-relatieveld "%1$s": post %2$d is een %3$s, en het veld staat alleen %4$s toe.', 'mcp-abilities-kadence' ),
+							$naam,
+							(int) $id,
+							$doel->post_type,
+							implode( ', ', $toegestaan )
+						);
+					}
+				}
+
+				return '';
+		}
+
+		return '';
 	}
 
 	/**

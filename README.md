@@ -3,7 +3,7 @@
 Geeft een MCP-agent toegang tot Kadence Blocks, Kadence Blocks Pro, Kadence Pro
 en het Kadence-thema, via de WordPress Abilities API.
 
-**Zevenendertig abilities: negentien lezen, achttien schrijven.**
+**Achtendertig abilities: negentien lezen, negentien schrijven.**
 
 Schrijven is hier dus geen uitzondering. Elke schrijfability vraagt drie dingen:
 de capability `kadence_mcp_write` (die bij installatie aan niemand wordt
@@ -53,6 +53,7 @@ post.
 | `kadence/replace-block` | een blok herbouwen met behoud van zijn `uniqueID` |
 | `kadence/duplicate-blocks` | een blok kopiëren naar een andere post |
 | `kadence/create-page` | een nieuwe pagina, standaard als concept |
+| `kadence/create-post` | een post van elk publiek posttype (bericht, dienst, markt …) met termen, uitgelichte afbeelding en ACF-velden, alles getoetst tegen dat posttype — standaard als concept |
 | `kadence/create-entity` | een lege navigatie, header of element met de volledige set instellingen van Kadence, of een vector uit een SVG — standaard als concept |
 | `kadence/set-page-status` | concept naar gepubliceerd, of terug |
 | `kadence/create-query` | een Query Loop kopiëren, met verse `uniqueID`s |
