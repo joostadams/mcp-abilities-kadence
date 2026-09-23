@@ -216,7 +216,7 @@ class Kadence_MCP_Abilities_Query {
 						'properties' => array(
 							'post_type'   => array( 'type' => 'object' ),
 							'taxonomies'  => array( 'type' => 'array' ),
-							'sample'      => array( 'type' => 'object' ),
+							'sample'      => array( 'type' => array( 'object', 'null' ) ),
 							'meta_fields' => array( 'type' => 'array' ),
 							'dynamic'     => array( 'type' => 'object' ),
 							'status'      => array( 'type' => 'string' ),

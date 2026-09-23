@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.23.0
+Stable tag: 1.23.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,9 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.23.1 =
+* Gecorrigeerd: describe-post-type gaf een fout ("output[sample] is not of type object") bij een posttype zonder gepubliceerde posts. sample is dan null, en het uitvoerschema stond dat niet toe. Juist bij een nieuwe omgeving, waar de posttypes er wel zijn maar nog leeg, was de tool daardoor onbruikbaar.
 
 = 1.23.0 =
 * Nieuw: kadence/create-entity. Maakt een lege kadence_navigation, kadence_header of kadence_element aan met ALLE instellingen die Kadence voor dat posttype registreert, op hun standaard — anders weigert set-entity-meta ze daarna, omdat een ontbrekende sleutel een typefout kan zijn. Afwijkende instellingen gaan meteen mee in meta, alleen geregistreerde sleutels. Een kadence_vector maakt hij uit een SVG, via de eigen route van Kadence en dus door de sanitizer van Kadence. Standaard een concept: een gepubliceerd element op replace_footer vervangt meteen de footer van de hele site. Samen met post_map in prepare-import is een header met navigaties, of een footer-element, nu van de ene omgeving naar de andere over te zetten zonder wizards.
