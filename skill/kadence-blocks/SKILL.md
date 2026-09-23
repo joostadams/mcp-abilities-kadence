@@ -648,8 +648,9 @@ Wat hij doet, in volgorde:
 6. schema en waardenlijsten, zoals `validate-write`
 7. tellers als `slideCount` en `tabCount` tegen het aantal kindblokken
 8. verwijzingen: links naar een ander domein, media, custom SVG-iconen
-   (`kb-custom-N`), termen, paletkleuren met hun waarde op de doelsite, en eigen
-   CSS-klassen
+   (`kb-custom-N`), termen, andere posts (navigatie, header, query, query card,
+   vector, formulier, menu-item naar een post), paletkleuren met hun waarde op
+   de doelsite, en eigen CSS-klassen
 
 Oordelen: **veilig** geeft een token; **blokkeer** niet; **riskant** — een
 verwijzing die op de doelsite niet bestaat — alleen met `accept_warnings`, en
@@ -660,10 +661,15 @@ Omzetten gaat alleen expliciet, er wordt niets geraden:
 | wat | hoe |
 |---|---|
 | domein, icoon, klasse | `replace`: `[{"from":"https://oud","to":"https://nieuw"}]` |
-| media-ID | `media_map`: `{"111": 87}` — de url wordt die van het nieuwe bestand |
+| media-ID | `media_map`: `{"111": 87}` — de url wordt die van het nieuwe bestand; geldt voor `{id, url/img}` én voor achtergrondparen als `bgImg` + `bgImgID` |
 | term-ID | `term_map`: `{"3": 12}` — het label wordt de naam van de nieuwe term |
+| post-ID | `post_map`: `{"183": 412}` — het `id` van `kadence/navigation`, `header`, `query`, `query-card`, `vector`, `advanced-form`, en van een `navigation-link` met `kind: post-type` (daar wordt de url de permalink van de nieuwe post; het label blijft) |
 
-Media- en term-ID's zijn getallen; `replace` werkt alleen op tekst en kan ze
+Een post-ID dat op de doelsite wel bestaat maar een ander type is, is erger dan
+een ontbrekend: een navigatieblok met het ID van een pagina toont stil niets.
+Het rapport meldt beide (`missing`, `wrong_type`).
+
+Media-, term- en post-ID's zijn getallen; `replace` werkt alleen op tekst en kan ze
 dus niet omzetten. En vervang nooit een los getal met `replace` — "112" komt
 ook in afmetingen voor.
 
@@ -676,8 +682,13 @@ geldig vindt kan alleen de JavaScript van het blok zeggen; de server kan dat
 niet toetsen.
 
 Werkwijze van de ene omgeving naar de andere: `get-raw-markup` op de bron →
-`prepare-import` op het doel, met `replace`/`media_map` → `insert-blocks` met
-het token → editor openen en `isValid` nalopen.
+`prepare-import` op het doel, met `replace`/`media_map`/`post_map` →
+`insert-blocks` met het token → editor openen en `isValid` nalopen.
+
+Hangt er iets aan elkaar via post-ID's — een header met navigaties, een mega
+menu met kleinere menu's erin, een footer met een vector — maak dan eerst de
+doelposts aan op de doelsite (leeg), noteer hun ID's, en zet over van onder
+naar boven: eerst wat nergens naar verwijst.
 
 ## Via de editor bouwen (`wp.data`)
 

@@ -257,7 +257,11 @@ zou een tweede plek zijn waar dezelfde grendels moeten kloppen.
 
 Verwijzingen worden gemeld en nooit geraden. Een media-ID op een andere site is
 een ander bestand; een term-ID ook. Omzetten gaat alleen met een kaart die de
-gebruiker opgeeft (`replace`, `media_map`, `term_map`). Een onopgeloste
+gebruiker opgeeft (`replace`, `media_map`, `term_map`, en sinds 1.22.0
+`post_map`). Welke blokken met hun `id` naar een post verwijzen staat in één
+tabel (`post_verwijzing()`), afgelezen uit de render van Kadence, die bij elk van
+die blokken het posttype controleert. Andere blokken gebruiken `id` voor iets
+anders — een bijlage, een volgnummer — en blijven erbuiten. Een onopgeloste
 verwijzing geeft geen token zonder `accept_warnings`, omdat "het icoon bestaat
 hier niet" een beslissing is en geen detail.
 

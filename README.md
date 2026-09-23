@@ -39,7 +39,7 @@ post.
 | `kadence/preview-write` | de markup voor en na, zonder iets op te slaan |
 | `kadence/validate-write` | toetst een voorgenomen wijziging — schrijft niets |
 | `kadence/verify-markup` | vindt blokken waarvan de klassen niet meer bij de attributen passen |
-| `kadence/prepare-import` | controleert markup uit de editor of van een andere site, zet uniqueIDs om, meldt verwijzingen en geeft een token voor `insert-blocks` — schrijft niets |
+| `kadence/prepare-import` | controleert markup uit de editor of van een andere site, zet uniqueIDs om, zet media-, term- en post-ID's om volgens een opgegeven kaart, meldt verwijzingen en geeft een token voor `insert-blocks` — schrijft niets |
 
 ### Schrijven
 

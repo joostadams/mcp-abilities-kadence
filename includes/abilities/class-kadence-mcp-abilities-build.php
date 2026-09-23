@@ -305,7 +305,7 @@ class Kadence_MCP_Abilities_Build {
 				'args' => array(
 					'label'       => __( 'Markup van elders controleren voor invoegen', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'Controleert blokmarkup die niet uit deze plug-in komt — uit de editor of van een andere site — en geeft een token voor insert-blocks. Schrijft zelf niets.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Neemt blokmarkup aan die NIET door generate-section is gebouwd — geserialiseerd in de editor, uitgelezen met get-raw-markup op een andere site, of uit een patroon — en maakt hem klaar om met insert-blocks in deze post te zetten. Schrijft zelf niets. Wat er gebeurt, in volgorde: (1) alleen blokken, geen losse HTML, en elk bloktype moet op deze site bestaan; (2) de markup moet een parse- en serialiseerronde overleven; (3) elke uniqueID krijgt een nieuwe waarde met het postprefix van DEZE post, in het attribuut en in de klassen, en de kaart staat in id_map; (4) de klassen in de markup moeten kloppen met de attributen, voor elk bloktype waarvan het profiel bekend is — dezelfde toets als verify-markup; (5) elk attribuut gaat door de schematoets en de waardenlijsten van validate-write; (6) tellers als slideCount en tabCount moeten gelijk zijn aan het aantal kindblokken; (7) alles wat naar buiten wijst wordt gemeld: links naar een ander domein, afbeeldingen en media-ID\'s die hier niet bestaan, custom SVG-iconen (kb-custom-N), termen, paletkleuren met hun waarde op DEZE site, en de eigen CSS-klassen die de markup gebruikt. Omzetten gebeurt alleen met replace: een lijst van letterlijke vervangingen die jij opgeeft (een ander domein, een ander icoon-ID); er wordt niets geraden. Oordeel veilig geeft een token voor insert-blocks. Bij blokkeer komt er geen token. Bij riskant — een verwijzing die op deze site niet bestaat — alleen met accept_warnings true, en dat hoort een mens te beslissen. Wat deze toets NIET kan: bewijzen dat de editor het blok straks geldig vindt, want die toets bestaat alleen in de JavaScript van het blok. Open de post daarom na het invoegen één keer in de editor.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Neemt blokmarkup aan die NIET door generate-section is gebouwd — geserialiseerd in de editor, uitgelezen met get-raw-markup op een andere site, of uit een patroon — en maakt hem klaar om met insert-blocks in deze post te zetten. Schrijft zelf niets. Wat er gebeurt, in volgorde: (1) alleen blokken, geen losse HTML, en elk bloktype moet op deze site bestaan; (2) de markup moet een parse- en serialiseerronde overleven; (3) elke uniqueID krijgt een nieuwe waarde met het postprefix van DEZE post, in het attribuut en in de klassen, en de kaart staat in id_map; (4) de klassen in de markup moeten kloppen met de attributen, voor elk bloktype waarvan het profiel bekend is — dezelfde toets als verify-markup; (5) elk attribuut gaat door de schematoets en de waardenlijsten van validate-write; (6) tellers als slideCount en tabCount moeten gelijk zijn aan het aantal kindblokken; (7) alles wat naar buiten wijst wordt gemeld: links naar een ander domein, afbeeldingen en media-ID\'s die hier niet bestaan, custom SVG-iconen (kb-custom-N), termen, verwijzingen naar andere posts (navigaties, headers, queries, query cards, vectoren, formulieren, menu-items naar een post) die hier niet bestaan of een ander type zijn, paletkleuren met hun waarde op DEZE site, en de eigen CSS-klassen die de markup gebruikt. Omzetten gebeurt alleen expliciet: replace voor letterlijke tekst (een ander domein, een ander icoon-ID), media_map, term_map en post_map voor ID\'s; er wordt niets geraden. Oordeel veilig geeft een token voor insert-blocks. Bij blokkeer komt er geen token. Bij riskant — een verwijzing die op deze site niet bestaat — alleen met accept_warnings true, en dat hoort een mens te beslissen. Wat deze toets NIET kan: bewijzen dat de editor het blok straks geldig vindt, want die toets bestaat alleen in de JavaScript van het blok. Open de post daarom na het invoegen één keer in de editor.', 'mcp-abilities-kadence' ),
 					'readonly'    => true,
 					'idempotent'  => false,
 					'input_schema' => array(
@@ -340,6 +340,11 @@ class Kadence_MCP_Abilities_Build {
 							'term_map' => array(
 								'type'                 => 'object',
 								'description'          => __( 'Term-ID\'s omzetten: {"3": 12}. Geldt voor gekozen termen in de vorm [{value, label}], zoals het filter van een Post Grid; het label wordt de naam van de nieuwe term.', 'mcp-abilities-kadence' ),
+								'additionalProperties' => array( 'type' => 'integer' ),
+							),
+							'post_map' => array(
+								'type'                 => 'object',
+								'description'          => __( 'Post-ID\'s omzetten: {"183": 412}. Geldt voor blokken die naar een andere post verwijzen: kadence/navigation, kadence/header, kadence/query, kadence/query-card, kadence/vector en kadence/advanced-form (hun id), en een kadence/navigation-link met kind post-type (id, en de url wordt de permalink van de nieuwe post). Post-ID\'s verschillen per site; replace kan ze niet omzetten, want het zijn getallen.', 'mcp-abilities-kadence' ),
 								'additionalProperties' => array( 'type' => 'integer' ),
 							),
 							'accept_warnings' => array(
@@ -1804,13 +1809,15 @@ class Kadence_MCP_Abilities_Build {
 		// 3b. Media- en term-ID's, alleen volgens een expliciete kaart.
 		$media_kaart = self::id_kaart( isset( $input['media_map'] ) ? $input['media_map'] : array() );
 		$term_kaart  = self::id_kaart( isset( $input['term_map'] ) ? $input['term_map'] : array() );
+		$post_kaart  = self::id_kaart( isset( $input['post_map'] ) ? $input['post_map'] : array() );
 
-		if ( ! empty( $media_kaart ) || ! empty( $term_kaart ) ) {
-			$omgezet = array( 'media' => 0, 'terms' => 0 );
-			$boom    = self::zet_ids_om( $boom, $media_kaart, $term_kaart, $omgezet );
+		if ( ! empty( $media_kaart ) || ! empty( $term_kaart ) || ! empty( $post_kaart ) ) {
+			$omgezet = array( 'media' => 0, 'terms' => 0, 'posts' => 0 );
+			$boom    = self::zet_ids_om( $boom, $media_kaart, $term_kaart, $omgezet, $post_kaart );
 
 			$gemeld[] = array( 'from' => 'media_map', 'to' => '', 'count' => $omgezet['media'] );
 			$gemeld[] = array( 'from' => 'term_map', 'to' => '', 'count' => $omgezet['terms'] );
+			$gemeld[] = array( 'from' => 'post_map', 'to' => '', 'count' => $omgezet['posts'] );
 		}
 
 		// 4. Nieuwe uniqueIDs met het prefix van DEZE post. Een ID dat in de
@@ -1856,6 +1863,7 @@ class Kadence_MCP_Abilities_Build {
 			'media'          => array(),
 			'icons'          => array(),
 			'terms'          => array(),
+			'posts'          => array(),
 			'palette'        => array(),
 			'css_classes'    => array(),
 		);
@@ -2131,7 +2139,11 @@ class Kadence_MCP_Abilities_Build {
 
 		// Media: een array met een id en een url-achtig veld ernaast is in
 		// Kadence vrijwel altijd een bijlage (backgroundImg, image, mediaUrl).
-		$zoek_media = static function ( $waarde ) use ( &$zoek_media, &$verwijzingen, $naam, $id ) {
+		// Bij een blok dat met zijn id naar een post verwijst (een menu-item met
+		// id en url) is dat paar op het bovenste niveau geen bijlage.
+		$is_post = null !== self::post_verwijzing( $naam, $attrs );
+
+		$zoek_media = static function ( $waarde, $bovenste = false ) use ( &$zoek_media, &$verwijzingen, $naam, $id, $is_post ) {
 			if ( ! is_array( $waarde ) ) {
 				return;
 			}
@@ -2144,8 +2156,15 @@ class Kadence_MCP_Abilities_Build {
 				}
 			}
 
-			if ( '' !== $url && isset( $waarde['id'] ) && is_numeric( $waarde['id'] ) && (int) $waarde['id'] > 0 ) {
+			if ( '' !== $url && isset( $waarde['id'] ) && is_numeric( $waarde['id'] ) && (int) $waarde['id'] > 0 && ! ( $bovenste && $is_post ) ) {
 				$verwijzingen['media'][] = array( 'id' => (int) $waarde['id'], 'url' => $url, 'block' => $naam, 'unique_id' => $id );
+			}
+
+			// Achtergronden bewaart Kadence als paar: bgImg met bgImgID ernaast
+			// (Row Layout op het bovenste niveau, Sectie in backgroundImg), en
+			// zo ook overlayBgImg/overlayBgImgID.
+			foreach ( self::media_paren( $waarde ) as $paar ) {
+				$verwijzingen['media'][] = array( 'id' => (int) $waarde[ $paar[1] ], 'url' => $waarde[ $paar[0] ], 'block' => $naam, 'unique_id' => $id );
 			}
 
 			foreach ( $waarde as $kind ) {
@@ -2153,7 +2172,7 @@ class Kadence_MCP_Abilities_Build {
 			}
 		};
 
-		$zoek_media( $attrs );
+		$zoek_media( $attrs, true );
 
 		// Termen: Kadence bewaart gekozen termen als [{value, label}].
 		foreach ( array( 'categories', 'tags' ) as $veld ) {
@@ -2172,6 +2191,19 @@ class Kadence_MCP_Abilities_Build {
 					);
 				}
 			}
+		}
+
+		// Posts: blokken die met hun id naar een andere post verwijzen.
+		$verwacht = self::post_verwijzing( $naam, $attrs );
+
+		if ( null !== $verwacht && isset( $attrs['id'] ) && is_numeric( $attrs['id'] ) && (int) $attrs['id'] > 0 ) {
+			$verwijzingen['posts'][] = array(
+				'id'        => (int) $attrs['id'],
+				'post_type' => $verwacht,
+				'label'     => isset( $attrs['label'] ) && is_string( $attrs['label'] ) ? $attrs['label'] : '',
+				'block'     => $naam,
+				'unique_id' => $id,
+			);
 		}
 
 		if ( ! empty( $attrs['className'] ) && is_string( $attrs['className'] ) ) {
@@ -2344,6 +2376,43 @@ class Kadence_MCP_Abilities_Build {
 
 		$rapport['terms'] = $termen;
 
+		// Posts: bestaat het ID hier, en is het van het verwachte type? Een
+		// navigatie-ID dat op deze site bij een pagina hoort, is erger dan een
+		// ontbrekend: het blok toont dan stil niets of iets anders.
+		$posts = array();
+
+		foreach ( $verwijzingen['posts'] as $item ) {
+			$doel           = get_post( $item['id'] );
+			$item['status'] = ! $doel ? 'missing' : ( $doel->post_type === $item['post_type'] ? 'ok' : 'wrong_type' );
+			$item['found']  = $doel ? array( 'post_type' => $doel->post_type, 'title' => get_the_title( $doel ) ) : null;
+			$posts[]        = $item;
+
+			if ( 'ok' !== $item['status'] ) {
+				$waarschuwingen[] = array(
+					'check'      => 'post',
+					'unresolved' => true,
+					'block'      => $item['block'],
+					'unique_id'  => $item['unique_id'],
+					'detail'     => 'missing' === $item['status']
+						? sprintf(
+							/* translators: 1: post ID, 2: post type. */
+							__( 'Post %1$d (%2$s) bestaat hier niet. Post-ID\'s verschillen per site: maak hem hier aan en zet het ID om met post_map.', 'mcp-abilities-kadence' ),
+							$item['id'],
+							$item['post_type']
+						)
+						: sprintf(
+							/* translators: 1: post ID, 2: expected post type, 3: found post type. */
+							__( 'Post %1$d is hier een %3$s, geen %2$s. Hetzelfde nummer wijst op een andere site naar iets anders; zet het om met post_map.', 'mcp-abilities-kadence' ),
+							$item['id'],
+							$item['post_type'],
+							$item['found']['post_type']
+						),
+				);
+			}
+		}
+
+		$rapport['posts'] = $posts;
+
 		// Paletkleuren: geen fout, wel van belang. palette6 is op elke site
 		// iets anders.
 		$stijlen = Kadence_MCP_Inventory::get_global_styles();
@@ -2514,8 +2583,8 @@ class Kadence_MCP_Abilities_Build {
 	 *
 	 * @return array
 	 */
-	private static function zet_ids_om( $blokken, $media_kaart, $term_kaart, &$omgezet ) {
-		$media = static function ( $waarde ) use ( &$media, $media_kaart, &$omgezet ) {
+	private static function zet_ids_om( $blokken, $media_kaart, $term_kaart, &$omgezet, $post_kaart = array() ) {
+		$media = static function ( $waarde, $overslaan = false ) use ( &$media, $media_kaart, &$omgezet ) {
 			if ( ! is_array( $waarde ) ) {
 				return $waarde;
 			}
@@ -2528,7 +2597,7 @@ class Kadence_MCP_Abilities_Build {
 				}
 			}
 
-			if ( '' !== $url_veld && isset( $waarde['id'] ) && is_numeric( $waarde['id'] ) && isset( $media_kaart[ (int) $waarde['id'] ] ) ) {
+			if ( ! $overslaan && '' !== $url_veld && isset( $waarde['id'] ) && is_numeric( $waarde['id'] ) && isset( $media_kaart[ (int) $waarde['id'] ] ) ) {
 				$nieuw         = $media_kaart[ (int) $waarde['id'] ];
 				$waarde['id']  = $nieuw;
 				$bestand       = wp_get_attachment_url( $nieuw );
@@ -2538,6 +2607,20 @@ class Kadence_MCP_Abilities_Build {
 				}
 
 				$omgezet['media']++;
+			}
+
+			foreach ( self::media_paren( $waarde ) as $paar ) {
+				if ( isset( $media_kaart[ (int) $waarde[ $paar[1] ] ] ) ) {
+					$nieuw               = $media_kaart[ (int) $waarde[ $paar[1] ] ];
+					$waarde[ $paar[1] ]  = $nieuw;
+					$bestand             = wp_get_attachment_url( $nieuw );
+
+					if ( $bestand ) {
+						$waarde[ $paar[0] ] = $bestand;
+					}
+
+					$omgezet['media']++;
+				}
 			}
 
 			foreach ( $waarde as $sleutel => $kind ) {
@@ -2552,7 +2635,10 @@ class Kadence_MCP_Abilities_Build {
 		foreach ( $blokken as $i => $blok ) {
 			if ( isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ) {
 				if ( ! empty( $media_kaart ) ) {
-					$blokken[ $i ]['attrs'] = $media( $blok['attrs'] );
+					// Het id op het bovenste niveau van een blok dat naar een post
+					// verwijst is geen bijlage; wat dieper ligt (mediaImage) wel.
+					$is_post                = null !== self::post_verwijzing( isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '', $blok['attrs'] );
+					$blokken[ $i ]['attrs'] = $media( $blok['attrs'], $is_post );
 				}
 
 				foreach ( array( 'categories', 'tags' ) as $veld ) {
@@ -2577,12 +2663,98 @@ class Kadence_MCP_Abilities_Build {
 				}
 			}
 
+			if ( ! empty( $post_kaart ) && isset( $blok['attrs']['id'] ) && is_numeric( $blok['attrs']['id'] ) && isset( $post_kaart[ (int) $blok['attrs']['id'] ] ) ) {
+				$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+
+				if ( null !== self::post_verwijzing( $naam, $blok['attrs'] ) ) {
+					$nieuw = $post_kaart[ (int) $blok['attrs']['id'] ];
+
+					$blokken[ $i ]['attrs']['id'] = $nieuw;
+
+					// Een menu-item naar een post draagt ook de url; die hoort
+					// bij de nieuwe post, anders wijst de link naar de oude site.
+					if ( 'kadence/navigation-link' === $naam && isset( $blok['attrs']['url'] ) ) {
+						$link = get_permalink( $nieuw );
+
+						if ( $link ) {
+							$blokken[ $i ]['attrs']['url'] = $link;
+						}
+					}
+
+					$omgezet['posts']++;
+				}
+			}
+
 			if ( ! empty( $blok['innerBlocks'] ) ) {
-				$blokken[ $i ]['innerBlocks'] = self::zet_ids_om( $blok['innerBlocks'], $media_kaart, $term_kaart, $omgezet );
+				$blokken[ $i ]['innerBlocks'] = self::zet_ids_om( $blok['innerBlocks'], $media_kaart, $term_kaart, $omgezet, $post_kaart );
 			}
 		}
 
 		return $blokken;
+	}
+
+	/**
+	 * De paren url + ID in één array, zoals Kadence ze voor achtergronden
+	 * bewaart: bgImg met bgImgID, overlayBgImg met overlayBgImgID. Een sleutel
+	 * op ID met een getal, en dezelfde sleutel zonder ID met een tekst ernaast.
+	 *
+	 * @param array $waarde De array.
+	 *
+	 * @return array<int,array{0:string,1:string}> Lijst van [url-sleutel, id-sleutel].
+	 */
+	private static function media_paren( $waarde ) {
+		$paren = array();
+
+		foreach ( $waarde as $sleutel => $inhoud ) {
+			if ( ! is_string( $sleutel ) || 'ID' !== substr( $sleutel, -2 ) || strlen( $sleutel ) < 3 ) {
+				continue;
+			}
+
+			$url_sleutel = substr( $sleutel, 0, -2 );
+
+			if ( is_numeric( $inhoud ) && (int) $inhoud > 0 && isset( $waarde[ $url_sleutel ] ) && is_string( $waarde[ $url_sleutel ] ) && '' !== $waarde[ $url_sleutel ] ) {
+				$paren[] = array( $url_sleutel, $sleutel );
+			}
+		}
+
+		return $paren;
+	}
+
+	/**
+	 * Naar welk posttype verwijst het id van dit blok, of null als het id
+	 * geen post is.
+	 *
+	 * Afgelezen uit de render van Kadence, die bij elk van deze blokken het
+	 * posttype controleert. Andere blokken met een id gebruiken het voor iets
+	 * anders: een bijlage (kadence/image), een volgnummer (kadence/tab,
+	 * kadence/slide, kadence/column). Die horen hier dus niet bij.
+	 *
+	 * @param string $naam  De bloknaam.
+	 * @param array  $attrs De attributen.
+	 *
+	 * @return string|null
+	 */
+	private static function post_verwijzing( $naam, $attrs ) {
+		$vast = array(
+			'kadence/navigation'    => 'kadence_navigation',
+			'kadence/header'        => 'kadence_header',
+			'kadence/query'         => 'kadence_query',
+			'kadence/query-card'    => 'kadence_query_card',
+			'kadence/vector'        => 'kadence_vector',
+			'kadence/advanced-form' => 'kadence_form',
+		);
+
+		if ( isset( $vast[ $naam ] ) ) {
+			return $vast[ $naam ];
+		}
+
+		// Een menu-item naar een post of pagina (de Navigation Builder zet die
+		// zo neer): kind post-type, met het posttype in type.
+		if ( 'kadence/navigation-link' === $naam && isset( $attrs['kind'], $attrs['type'] ) && 'post-type' === $attrs['kind'] && is_string( $attrs['type'] ) && '' !== $attrs['type'] ) {
+			return $attrs['type'];
+		}
+
+		return null;
 	}
 
 	/**

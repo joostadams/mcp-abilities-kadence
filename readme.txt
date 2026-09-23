@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.21.0
+Stable tag: 1.22.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,12 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.22.0 =
+* Nieuw in prepare-import: post_map. Blokken die met hun id naar een andere post verwijzen — kadence/navigation, kadence/header, kadence/query, kadence/query-card, kadence/vector, kadence/advanced-form, en een kadence/navigation-link met kind post-type — krijgen het nieuwe ID uit de kaart; bij het menu-item wordt de url de permalink van de nieuwe post. Zonder deze kaart kon een header met navigaties, of een mega menu met kleinere menu's erin, niet naar een andere omgeving: post-ID's verschillen per site en replace kan geen getallen omzetten.
+* prepare-import meldt nu ook verwijzingen naar posts: ontbreekt het ID op deze site, of is het een ander posttype (een navigatieblok met het ID van een pagina), dan is dat een onopgeloste waarschuwing.
+* media_map kent nu ook de achtergrondparen van Kadence: bgImg met bgImgID (Row Layout, Sectie) en overlayBgImg met overlayBgImgID. Die werden niet herkend, dus een achtergrondfoto kwam met het ID van de bronsite mee.
+* Gecorrigeerd: de media-herkenning zag de id en url van een menu-item aan voor een bijlage, en media_map zou zo'n menu-item omzetten als foto.
 
 = 1.21.0 =
 * Nieuw: kadence/prepare-import. insert-blocks nam alleen markup uit generate-section, dus markup die de editor zelf schreef — tabs, een slider, alles wat de generator niet kent — of markup van een andere omgeving kon er niet in, terwijl juist die het meest te vertrouwen is. prepare-import schrijft niets: hij controleert (alleen blokken, bestaande bloktypes, rondgang, klassen tegen attributen, schema en waardenlijsten, tellers als slideCount tegen het aantal kindblokken), geeft elke uniqueID het prefix van de doelpost, en meldt wat per site verschilt: links naar een ander domein, media, custom SVG-iconen, termen, paletkleuren met hun waarde op de doelsite, en eigen CSS-klassen. Omzetten alleen expliciet, met replace, media_map en term_map; er wordt niets geraden. Veilig geeft een token voor insert-blocks; een verwijzing die niet bestaat geeft geen token zonder accept_warnings.
