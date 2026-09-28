@@ -297,6 +297,18 @@ class Kadence_MCP_Abilities_Blocks {
 			$samenvatting          = Kadence_MCP_Inventory::vat_attribuut_samen( $sleutel, is_array( $definitie ) ? $definitie : array(), $naam );
 			$samenvatting['group'] = Kadence_MCP_Inventory::groep_van_attribuut( $sleutel );
 
+			// Een attribuut dat WordPress via block-supports toevoegt draagt een
+			// naam die ook iets van het blok zelf lijkt te zijn. Op Dynamic List
+			// is "style" de support (een object met color, typography …) en heet
+			// de lijststijl listStyle; wie "pill" in style schrijft krijgt een
+			// typefout die niets over listStyle zegt.
+			$botsing = Kadence_MCP_Inventory::support_naambotsing( $sleutel, $blok['attributes'] );
+
+			if ( '' !== $botsing ) {
+				$samenvatting['from_supports'] = true;
+				$samenvatting['note']          = trim( ( isset( $samenvatting['note'] ) ? $samenvatting['note'] . ' ' : '' ) . $botsing );
+			}
+
 			$uitvoer[] = $samenvatting;
 		}
 

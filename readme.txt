@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.25.0
+Stable tag: 1.26.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,16 +12,17 @@ Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema uitlezen en
 
 == Description ==
 
-Veertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
+Achtenveertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
 de Kadence-opbouw van een site kan uitlezen en gericht kan wijzigen: welke
 blokken er zijn, welke attributen die hebben, hoe een pagina is opgebouwd,
 welke headers en elementen er staan, en welk kleurenpalet er geldt.
 
-Negentien daarvan zijn alleen-lezen. Eenentwintig schrijven: set-attributes,
+Drieëntwintig daarvan zijn alleen-lezen. Vijfentwintig schrijven: set-attributes,
 style-blocks, set-text, insert-blocks, remove-blocks, move-blocks, duplicate-blocks,
 replace-block, create-page, create-entity, create-post, update-post, set-page-status, create-query, create-query-card,
 set-query, sync-query-facets, set-card-layout, set-entity-meta,
-set-global-typography en set-site-css. Ze vragen alle eenentwintig een eigen capability (kadence_mcp_write, die na installatie aan
+set-global-typography, set-site-css, replace-colors, update-entity-content,
+trash-post en import-entity. Ze vragen alle vijfentwintig een eigen capability (kadence_mcp_write, die na installatie aan
 niemand is toegekend), bewerkrecht op de post volgens WordPress, en een token
 uit een voorafgaande controlestap. Na elke schrijfactie wordt de post
 teruggelezen en vergeleken met wat er bedoeld was.
@@ -38,6 +39,28 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.26.0 =
+* Nieuw: kadence/check-access. Wat dit account per posttype mag lezen, bewerken, aanmaken en publiceren, en of edit_theme_options en unfiltered_html ontbreken — vooraf, in plaats van achteraf aan een stille fout te merken. list-entities telt nu ook posts die er wel zijn maar niet leesbaar (unreadable).
+* Nieuw: kadence/audit-colors en kadence/replace-colors. Per kleurwaarde waar hij staat (blokattributen, Kadence-meta, typografie), met hex die gelijk is aan een paletkleur apart gemeld; en omzetten met een kaart {oud: nieuw}, één revisie per post. Bewust overgeslagen, met reden: een var() waar een opacity bij hoort (ook schaduwen als object en als lijst), een paletnaam in een niet-Kadence-blok, een niet-hex waarde in een Gravity Forms-blok.
+* Nieuw: kadence/site-fingerprint. Hashes van palet, typografie (opgeslagen of standaard), fonts, taxonomieën, termen met beschrijving, Kadence-objecten (op titel, zonder ID's en domein), plugins en leesinstellingen, om twee sites structureel te vergelijken; met detail de waarden zelf.
+* Nieuw: kadence/export-entity en kadence/import-entity. Een Kadence-object met inhoud én _kad-meta als pakket, met de verwijzingen die een kaart nodig hebben; neerzetten als nieuw object of over een bestaand, met replace, post_map, media_map en term_map, en byte voor byte teruggelezen. De export/import van Kadence zelf haalt backslashes uit de inhoud.
+* Nieuw: kadence/update-entity-content (tekst vervangen in de SVG van een vector of de JSON van een custom SVG, met verwacht aantal en verliescontrole) en kadence/trash-post (prullenbak na een controle op gebruik; nooit definitief).
+* validate-write, set-attributes, style-blocks, get-raw-markup en inspect-post nemen een pad ("pad:0.1.0.2") aan in plaats van een uniqueID, voor core-blokken en het formulierblok van Gravity Forms. inspect-post geeft blokken zonder uniqueID een veld path.
+* validate-write blokkeert een Kadence-paletnaam (palette5) in een kleurattribuut van een niet-Kadence-blok; verify-markup meldt bestaande gevallen (palette_names) en Kadence-blokken zonder uniqueID (missing_unique_id, met een voorstel in Kadence-vorm).
+* get-global-styles: typography_sources (opgeslagen of Kadence-standaard), fonts (de font-faces van Kadence Custom Fonts, met een waarschuwing voor een family of gewicht zonder bestand), en in environment de versie van het child theme en een actieve paginacache.
+* create-entity voor een vector voorspelt vooraf wat er na de sanitizer van Kadence en kses van de SVG overblijft en weigert bij verlies (accept_loss); na het aanmaken wordt op elementen teruggelezen.
+* set-entity-meta: items voor dezelfde wijziging op meerdere entiteiten, met één token.
+* find-post: unique_id, om het tegenstuk van een blok op een andere site te vinden.
+* create-post: date en een expliciet lege lijst termen ({"category": []}); het voorstel meldt wat WordPress er zelf bij zet, het antwoord wat het er heeft bijgezet.
+* create-query: preset no-filters of simple, met card_id, volgens de templates van Kadence.
+* check-bindings waarschuwt voor een dynamische achtergrond in een lus zonder inQueryBlock (alle kaarten één foto).
+* replace-block schrijft de link van een Sectie (kb-section-has-link en de link-overlay, ook dynamisch); kadence/search is als niet te bouwen gemarkeerd, met uitleg.
+* validate-write zegt bij maxWidth op een Sectie per breekpunt wat het wordt (in een verticale ouder de hoogte, ook bij vertical-reverse).
+* describe-block markeert block-support-attributen met een naam die op een eigen instelling lijkt (style tegenover listStyle), kent allOption op de dropdown en de checkboxen, en de waarden van widthType (knop) en slideFrom/widthType (off-canvas).
+* get-raw-markup: lezen in stukken met offset, en truncated, next_offset en total_chars als eigen velden.
+* Gecorrigeerd: find-usages vond "id":2 ook in "id":24 en telde het volgnummer van tabs en slides als verwijzing.
+* De foutmelding bij een verlopen token noemt de gewone oorzaak (een andere schrijfactie op dezelfde post) en hoe je dat voorkomt.
 
 = 1.25.0 =
 * Nieuw: kadence/update-post. De tegenhanger van create-post voor een bestaande post: titel, slug, samenvatting, volgorde, uitgelichte afbeelding, termen (per genoemde taxonomie vervangen) en ACF-velden (op veldsleutel), met dezelfde toetsen tegen het posttype. Het voorstel geeft before en after per onderdeel; ACF-velden, termen en de afbeelding kennen geen revisies. Nodig om de inhoud van diensten en markten naar een andere omgeving te zetten: create-post kon alleen aanmaken.

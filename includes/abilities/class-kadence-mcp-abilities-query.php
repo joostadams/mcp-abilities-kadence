@@ -143,7 +143,7 @@ class Kadence_MCP_Abilities_Query {
 				'args' => array(
 					'label'       => __( 'Een nieuwe Query Loop aanmaken', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'SCHRIJFACTIE. Maakt een kadence_query door een bestaande te kopiëren, met verse uniqueIDs en kloppende facetten.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Maakt een nieuwe Query Loop door een bestaande te kopiëren. Kopiëren en niet vanaf nul opbouwen, om dezelfde reden als bij duplicate-blocks: de layout komt uit de editor en is dus geldig, en een Query Loop hangt aan een query-card die op zijn beurt een eigen post is — die verwijzing blijft bij een kopie gewoon staan. Wat er gebeurt: de blokken worden overgenomen met VERSE uniqueIDs geprefixt met de nieuwe post, alle _kad_query-instellingen worden meegenomen, en daarna worden de facetten opnieuw berekend. Dat laatste is niet optioneel — de facetten wijzen met een uniqueID naar de filterblokken, en die zijn net allemaal veranderd; zou je ze laten staan, dan wijst elk filter in de nieuwe query naar een blok dat er niet is. Met settings kun je meteen instellen wat de nieuwe query ophaalt. Plaatsen op een pagina doe je daarna zelf: bouw met generate-section een custom boom met één blok kadence/query en het id van de nieuwe query, en voeg dat in met insert-blocks. Twee stappen: eerst zonder token voor een voorstel, daarna met token om echt aan te maken.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Maakt een nieuwe Query Loop door een bestaande te kopiëren, of met preset (no-filters of simple) volgens de templates van Kadence\'s keuzescherm, met een bestaande card. Kopiëren en niet vanaf nul opbouwen, om dezelfde reden als bij duplicate-blocks: de layout komt uit de editor en is dus geldig, en een Query Loop hangt aan een query-card die op zijn beurt een eigen post is — die verwijzing blijft bij een kopie gewoon staan. Wat er gebeurt: de blokken worden overgenomen met VERSE uniqueIDs geprefixt met de nieuwe post, alle _kad_query-instellingen worden meegenomen, en daarna worden de facetten opnieuw berekend. Dat laatste is niet optioneel — de facetten wijzen met een uniqueID naar de filterblokken, en die zijn net allemaal veranderd; zou je ze laten staan, dan wijst elk filter in de nieuwe query naar een blok dat er niet is. Met settings kun je meteen instellen wat de nieuwe query ophaalt. Plaatsen op een pagina doe je daarna zelf: bouw met generate-section een custom boom met één blok kadence/query en het id van de nieuwe query, en voeg dat in met insert-blocks. Twee stappen: eerst zonder token voor een voorstel, daarna met token om echt aan te maken.', 'mcp-abilities-kadence' ),
 					'readonly'    => false,
 					'destructive' => false,
 					'idempotent'  => false,
@@ -164,9 +164,16 @@ class Kadence_MCP_Abilities_Query {
 								'description'          => __( 'Instellingen die afwijken van de bron, zoals postType of perPage. Wordt samengevoegd met de instellingen van de bron.', 'mcp-abilities-kadence' ),
 								'additionalProperties' => true,
 							),
+							'preset' => array(
+								'type'        => 'string',
+								'enum'        => array( 'no-filters', 'simple' ),
+								'description' => __( 'In plaats van source_id: een nieuwe query volgens een preset van Kadence. no-filters is alleen de card; simple is filterknoppen op een taxonomie, de card en paginering. Vraagt card_id.', 'mcp-abilities-kadence' ),
+							),
+							'card_id' => array( 'type' => 'integer', 'minimum' => 1, 'description' => __( 'Bij preset: de kadence_query_card die de resultaten toont.', 'mcp-abilities-kadence' ) ),
+							'taxonomy' => array( 'type' => 'string', 'description' => __( 'Bij preset simple: de taxonomie van de filterknoppen. Standaard category (product_cat bij producten), zoals Kadence.', 'mcp-abilities-kadence' ) ),
 							'token' => array( 'type' => 'string' ),
 						),
-						'required'             => array( 'source_id', 'title' ),
+						'required'             => array( 'title' ),
 						'additionalProperties' => false,
 					),
 					'output_schema' => array(
@@ -322,7 +329,7 @@ class Kadence_MCP_Abilities_Query {
 				'args' => array(
 					'label'       => __( 'Een instelling van een Kadence-entiteit wijzigen', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'SCHRIJFACTIE. Schrijft een _kad_-instelling op een Kadence-post.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Wijzigt de INSTELLINGEN van een Kadence-entiteit: een navigatie, een element, een header, een query of een query card. Die staan niet in de blokmarkup maar in post meta met de prefix _kad_, en geen enkele blok-ability komt daarbij. Dat is het verschil tussen "wat er in het menu staat" (blokken, dus set-attributes) en "hoe het menu eruitziet" (meta, dus hier): de linkkleur van een navigatie, de breedte van een dropdown, en bij een element de plaatsing — welke hook, op welke pagina\'s wel en op welke niet. Lees eerst get-post-meta: een sleutel die daar niet in staat wordt geweigerd, want Kadence schrijft bij het opslaan zijn hele set weg, en een sleutel die ontbreekt is dus een typefout of een instelling die deze entiteit niet kent. Zo een sleutel zou stil opgeslagen worden en daarna genegeerd, en dat ziet eruit alsof het gelukt is. LET OP: post meta kent geen revisies. Terugdraaien kan alleen met de waarden uit het veld before van het antwoord, dus bewaar die. Twee stappen: eerst zonder token voor een voorstel met oud en nieuw naast elkaar, daarna opnieuw met dat token om te schrijven. Er wordt teruggelezen.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Wijzigt de INSTELLINGEN van een Kadence-entiteit: een navigatie, een element, een header, een query of een query card. Die staan niet in de blokmarkup maar in post meta met de prefix _kad_, en geen enkele blok-ability komt daarbij. Dat is het verschil tussen "wat er in het menu staat" (blokken, dus set-attributes) en "hoe het menu eruitziet" (meta, dus hier): de linkkleur van een navigatie, de breedte van een dropdown, en bij een element de plaatsing — welke hook, op welke pagina\'s wel en op welke niet. Lees eerst get-post-meta: een sleutel die daar niet in staat wordt geweigerd, want Kadence schrijft bij het opslaan zijn hele set weg, en een sleutel die ontbreekt is dus een typefout of een instelling die deze entiteit niet kent. Zo een sleutel zou stil opgeslagen worden en daarna genegeerd, en dat ziet eruit alsof het gelukt is. LET OP: post meta kent geen revisies. Terugdraaien kan alleen met de waarden uit het veld before van het antwoord, dus bewaar die. Twee stappen: eerst zonder token voor een voorstel met oud en nieuw naast elkaar, daarna opnieuw met dat token om te schrijven. Er wordt teruggelezen. Dezelfde wijziging op meerdere entiteiten (de linkkleur van zes navigaties) kan in één keer met items: [{post_id, meta}, …] — één voorstel, één token.', 'mcp-abilities-kadence' ),
 					'readonly'    => false,
 					'destructive' => true,
 					'idempotent'  => true,
@@ -343,13 +350,25 @@ class Kadence_MCP_Abilities_Query {
 								'type'        => 'string',
 								'description' => __( 'Laat leeg voor een voorstel zonder te schrijven. Vul het token in dat je dan terugkrijgt om het echt te doen.', 'mcp-abilities-kadence' ),
 							),
+							'items' => array(
+								'type'        => 'array',
+								'description' => __( 'In plaats van post_id en meta: dezelfde soort wijziging op meerdere entiteiten, als lijst van {post_id, meta}. Eén voorstel, één token, alles of niets bij de toets. Handig voor bijvoorbeeld de linkkleur van zes navigaties.', 'mcp-abilities-kadence' ),
+								'items'       => array(
+									'type'       => 'object',
+									'properties' => array(
+										'post_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+										'meta'    => array( 'type' => 'object', 'additionalProperties' => true ),
+									),
+									'required'   => array( 'post_id', 'meta' ),
+								),
+							),
 						),
-						'required'             => array( 'post_id', 'meta' ),
 						'additionalProperties' => false,
 					),
 					'output_schema' => array(
 						'type'       => 'object',
 						'properties' => array(
+							'items'   => array( 'type' => 'array' ),
 							'post'    => array( 'type' => 'object' ),
 							'before'  => array( 'type' => 'object' ),
 							'after'   => array( 'type' => 'object' ),
@@ -458,6 +477,10 @@ class Kadence_MCP_Abilities_Query {
 	 * @return array|WP_Error
 	 */
 	public static function set_entity_meta( $input = array() ) {
+		if ( ! empty( $input['items'] ) && is_array( $input['items'] ) ) {
+			return self::set_entity_meta_batch( $input['items'], isset( $input['token'] ) ? (string) $input['token'] : '' );
+		}
+
 		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
 
 		if ( ! $post ) {
@@ -612,6 +635,141 @@ class Kadence_MCP_Abilities_Query {
 						implode( ', ', $afwijking )
 					),
 			)
+		);
+	}
+
+	/**
+	 * Dezelfde schrijfactie op meerdere entiteiten, met één token.
+	 *
+	 * Zes navigaties op twee sites waren op 28-09-2026 24 aanroepen. Hier is
+	 * dat één voorstel en één schrijfactie. Alles of niets: faalt de toets op
+	 * één entiteit, dan komt er geen token en wordt er niets geschreven. Het
+	 * token is gebonden aan de tokens van de afzonderlijke voorstellen, dus
+	 * aan elke post, elke sleutel en elke waarde.
+	 *
+	 * @param array  $items De entiteiten: lijst van {post_id, meta}.
+	 * @param string $token Leeg voor een voorstel.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function set_entity_meta_batch( $items, $token ) {
+		$voorstellen = array();
+		$gezien      = array();
+
+		foreach ( $items as $item ) {
+			$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
+
+			if ( isset( $gezien[ $post_id ] ) ) {
+				return new WP_Error(
+					'kadence_mcp_meta_duplicate_post',
+					sprintf(
+						/* translators: %d: post ID. */
+						__( 'Post %d staat twee keer in items. Voeg de sleutels samen tot één item; anders is niet te zien welke waarde wint.', 'mcp-abilities-kadence' ),
+						$post_id
+					)
+				);
+			}
+
+			$gezien[ $post_id ] = true;
+
+			$uitslag = self::set_entity_meta(
+				array(
+					'post_id' => $post_id,
+					'meta'    => isset( $item['meta'] ) && is_array( $item['meta'] ) ? $item['meta'] : array(),
+				)
+			);
+
+			if ( is_wp_error( $uitslag ) ) {
+				return new WP_Error(
+					$uitslag->get_error_code(),
+					sprintf(
+						/* translators: 1: post ID, 2: message. */
+						__( 'Post %1$d: %2$s Er is niets geschreven, ook niet op de andere posts.', 'mcp-abilities-kadence' ),
+						$post_id,
+						$uitslag->get_error_message()
+					)
+				);
+			}
+
+			$voorstellen[] = array(
+				'post_id' => $post_id,
+				'meta'    => $item['meta'],
+				'rapport' => $uitslag,
+			);
+		}
+
+		$grondslag = 'kmcp1_' . substr( wp_hash( implode( '|', wp_list_pluck( wp_list_pluck( $voorstellen, 'rapport' ), 'token' ) ) ), 0, 32 );
+		$wijzigingen = 0;
+
+		foreach ( $voorstellen as $v ) {
+			$wijzigingen += count( $v['rapport']['changed'] );
+		}
+
+		if ( '' === $token ) {
+			return array(
+				'items'   => array_map(
+					static function ( $v ) {
+						unset( $v['rapport']['token'], $v['rapport']['written'], $v['rapport']['status'] );
+
+						return $v['rapport'];
+					},
+					$voorstellen
+				),
+				'written' => false,
+				'token'   => $grondslag,
+				'status'  => sprintf(
+					/* translators: 1: changes, 2: posts. */
+					__( 'Voorstel, er is NIETS opgeslagen. Er zouden %1$d instellingen wijzigen over %2$d entiteiten. Post meta kent geen revisies: bewaar per item het veld before. Roep opnieuw aan met dezelfde items en het token om alles te schrijven.', 'mcp-abilities-kadence' ),
+					$wijzigingen,
+					count( $voorstellen )
+				),
+			);
+		}
+
+		if ( ! hash_equals( $grondslag, $token ) ) {
+			return new WP_Error( 'kadence_mcp_bad_token', __( 'Het token hoort niet bij deze items, of een van de posts is sinds het voorstel gewijzigd. Vraag opnieuw een voorstel.', 'mcp-abilities-kadence' ) );
+		}
+
+		$resultaten = array();
+		$afwijkend  = array();
+
+		foreach ( $voorstellen as $v ) {
+			$uitslag = self::set_entity_meta(
+				array(
+					'post_id' => $v['post_id'],
+					'meta'    => $v['meta'],
+					'token'   => $v['rapport']['token'],
+				)
+			);
+
+			if ( is_wp_error( $uitslag ) ) {
+				$resultaten[] = array( 'post_id' => $v['post_id'], 'error' => $uitslag->get_error_message() );
+				$afwijkend[]  = $v['post_id'];
+				continue;
+			}
+
+			if ( empty( $uitslag['written'] ) ) {
+				$afwijkend[] = $v['post_id'];
+			}
+
+			$resultaten[] = $uitslag;
+		}
+
+		return array(
+			'items'   => $resultaten,
+			'written' => empty( $afwijkend ),
+			'token'   => '',
+			'status'  => empty( $afwijkend )
+				? sprintf(
+					/* translators: %d: posts. */
+					__( 'geschreven en teruggelezen op %d entiteiten. Er is GEEN revisie; terugdraaien kan alleen met de waarden uit before per item.', 'mcp-abilities-kadence' ),
+					count( $resultaten )
+				)
+				: sprintf(
+					/* translators: %s: post IDs. */
+					__( 'LET OP: bij %s is niet (of niet zoals bedoeld) geschreven; zie per item status en after. De andere items staan er wel.', 'mcp-abilities-kadence' ),
+					implode( ', ', $afwijkend )
+				),
 		);
 	}
 
@@ -970,6 +1128,10 @@ class Kadence_MCP_Abilities_Query {
 	 * @return array|WP_Error
 	 */
 	public static function create_query( $input = array() ) {
+		if ( ! empty( $input['preset'] ) && empty( $input['source_id'] ) ) {
+			return self::create_query_uit_preset( $input );
+		}
+
 		$bron = self::query_post( isset( $input['source_id'] ) ? $input['source_id'] : 0 );
 
 		if ( is_wp_error( $bron ) ) {
@@ -1172,6 +1334,162 @@ class Kadence_MCP_Abilities_Query {
 						count( isset( $stand['computed'] ) ? $stand['computed'] : array() )
 					)
 					: __( 'LET OP: de query is aangemaakt maar heeft geen inhoud bij het teruglezen. Controleer hem.', 'mcp-abilities-kadence' ),
+			)
+		);
+	}
+
+	/**
+	 * Een nieuwe Query Loop vanaf een preset van Kadence, zonder bron.
+	 *
+	 * Dezelfde templates als het keuzescherm van Kadence bij een nieuwe query
+	 * (kadence-blocks-pro, dist/blocks-query.js, 2.8.19): "No Filters" is alleen
+	 * een query-card, "Simple Filters" is filterknoppen op de categorie, de
+	 * card en paginering. De card zelf moet al bestaan — een query-card-blok
+	 * zonder id rendert op de voorkant niets.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function create_query_uit_preset( $input ) {
+		$preset = (string) $input['preset'];
+		$titel  = isset( $input['title'] ) ? trim( wp_strip_all_tags( (string) $input['title'] ) ) : '';
+		$card   = isset( $input['card_id'] ) ? get_post( (int) $input['card_id'] ) : null;
+
+		if ( ! in_array( $preset, array( 'no-filters', 'simple' ), true ) ) {
+			return new WP_Error( 'kadence_mcp_unknown_preset', __( 'preset is no-filters of simple. Voor een complexere opbouw: kopieer een bestaande query met source_id.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( '' === $titel ) {
+			return new WP_Error( 'kadence_mcp_no_title', __( 'Geef de nieuwe query een titel. Dat is de naam waarmee hij in de editor te kiezen is.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( ! $card || 'kadence_query_card' !== $card->post_type ) {
+			return new WP_Error( 'kadence_mcp_no_card', __( 'Geef card_id: een bestaande kadence_query_card (list-entities, of maak er een met create-query-card). Een query zonder card toont niets.', 'mcp-abilities-kadence' ) );
+		}
+
+		$voorstel = isset( $input['settings'] ) && is_array( $input['settings'] ) ? $input['settings'] : array();
+		$onbekend = array_diff( array_keys( $voorstel ), array_keys( Kadence_MCP_Query::QUERY_SLEUTELS ) );
+
+		if ( ! empty( $onbekend ) ) {
+			return new WP_Error( 'kadence_mcp_unknown_query_key', sprintf( __( 'Onbekende sleutels in settings: %s.', 'mcp-abilities-kadence' ), implode( ', ', $onbekend ) ) );
+		}
+
+		// De standaard van Kadence zelf, uit de geregistreerde meta.
+		$registratie = get_registered_meta_keys( 'post', 'kadence_query' );
+		$basis       = isset( $registratie['_kad_query_query']['default'] ) && is_array( $registratie['_kad_query_query']['default'] ) ? $registratie['_kad_query_query']['default'] : array();
+		$instellingen = array_merge( $basis, $voorstel );
+		$posttype     = isset( $instellingen['postType'] ) ? (array) $instellingen['postType'] : array( 'post' );
+		$taxonomie    = isset( $input['taxonomy'] ) ? (string) $input['taxonomy'] : ( in_array( 'product', $posttype, true ) ? 'product_cat' : 'category' );
+
+		if ( 'simple' === $preset && ! taxonomy_exists( $taxonomie ) ) {
+			return new WP_Error( 'kadence_mcp_bad_taxonomy', sprintf( __( 'De taxonomie %s bestaat niet; geef taxonomy mee.', 'mcp-abilities-kadence' ), $taxonomie ) );
+		}
+
+		if ( 'simple' === $preset && ! array_intersect( $posttype, (array) get_taxonomy( $taxonomie )->object_type ) ) {
+			return new WP_Error( 'kadence_mcp_bad_taxonomy', sprintf( __( 'De taxonomie %1$s hangt niet aan %2$s: het filter zou leeg blijven. Geef een taxonomie die bij het posttype hoort.', 'mcp-abilities-kadence' ), $taxonomie, implode( ', ', $posttype ) ) );
+		}
+
+		$card_blok = '<!-- wp:kadence/query-card ' . wp_json_encode( array( 'uniqueID' => 'tpl_card', 'id' => (int) $card->ID ) ) . ' /-->';
+		$delen     = 'simple' === $preset
+			? array(
+				'<!-- wp:kadence/query-filter-buttons ' . wp_json_encode( array( 'uniqueID' => 'tpl_filter', 'taxonomy' => $taxonomie, 'inheritStyles' => 'pill', 'showLabel' => false, 'margin' => array( '', '', 'md', '' ), 'sizePreset' => 'small', 'allOption' => true ) ) . ' /-->',
+				$card_blok,
+				'<!-- wp:kadence/query-pagination ' . wp_json_encode( array( 'uniqueID' => 'tpl_pagination' ) ) . ' /-->',
+			)
+			: array( $card_blok );
+		$sjabloon  = '<!-- wp:kadence/query {"uniqueID":"tpl_query"} -->' . "\n" . implode( "\n\n", $delen ) . "\n" . '<!-- /wp:kadence/query -->';
+		$proef     = Kadence_MCP_Query::proefdraai( $instellingen );
+		$token     = isset( $input['token'] ) ? (string) $input['token'] : '';
+		$grondslag = Kadence_MCP_Inventory::schrijf_token( $card, '__preset__', array( 'preset' => $preset, 'title' => $titel, 'settings' => $instellingen, 'taxonomy' => $taxonomie ) );
+		$rapport   = array(
+			'preset'   => $preset,
+			'card'     => array( 'id' => $card->ID, 'title' => get_the_title( $card ) ),
+			'settings' => (object) $instellingen,
+			'test_run' => (object) $proef,
+			'blocks'   => 'simple' === $preset ? array( 'kadence/query-filter-buttons (' . $taxonomie . ')', 'kadence/query-card', 'kadence/query-pagination' ) : array( 'kadence/query-card' ),
+		);
+
+		if ( '' === $token ) {
+			return array_merge(
+				$rapport,
+				array(
+					'new_id'  => 0,
+					'created' => false,
+					'token'   => $grondslag,
+					'status'  => sprintf(
+						/* translators: 1: title, 2: preset, 3: posts. */
+						__( 'Voorstel, er is NIETS aangemaakt. Er zou een query "%1$s" komen volgens de preset %2$s van Kadence; de proefdraai levert %3$d berichten op. Roep opnieuw aan met het token.', 'mcp-abilities-kadence' ),
+						$titel,
+						$preset,
+						(int) $proef['found']
+					),
+				)
+			);
+		}
+
+		$mag = self::mag_schrijven( null );
+
+		if ( is_wp_error( $mag ) ) {
+			return $mag;
+		}
+
+		$type_object = get_post_type_object( 'kadence_query' );
+
+		if ( ! current_user_can( $type_object && isset( $type_object->cap->create_posts ) ? (string) $type_object->cap->create_posts : 'edit_posts' ) ) {
+			return new WP_Error( 'kadence_mcp_create_denied', __( 'Je mag geen Query Loop aanmaken.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		if ( ! hash_equals( $grondslag, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $grondslag, $card ) );
+		}
+
+		$nieuw_id = wp_insert_post( array( 'post_type' => 'kadence_query', 'post_status' => 'publish', 'post_title' => $titel, 'post_content' => '' ), true );
+
+		if ( is_wp_error( $nieuw_id ) ) {
+			return $nieuw_id;
+		}
+
+		$boom  = parse_blocks( $sjabloon );
+		$kaart = array();
+		$bezet = array();
+
+		foreach ( array_keys( Kadence_MCP_Inventory::verzamel_unique_ids( $boom ) ) as $oud_id ) {
+			$vers             = Kadence_MCP_Inventory::nieuwe_unique_id( $nieuw_id, $bezet );
+			$bezet[ $vers ]   = true;
+			$kaart[ $oud_id ] = $vers;
+		}
+
+		$inhoud = Kadence_MCP_Inventory::serialiseer( Kadence_MCP_Inventory::hernoem_unique_ids( $boom, $kaart ) );
+
+		wp_update_post( array( 'ID' => $nieuw_id, 'post_content' => wp_slash( $inhoud ) ), true );
+
+		// Alle instellingen die Kadence voor een query registreert, op hun
+		// standaard, zodat set-query en set-entity-meta ze later herkennen.
+		foreach ( $registratie as $sleutel => $args ) {
+			if ( 0 === strpos( (string) $sleutel, '_kad_query_' ) && array_key_exists( 'default', $args ) && '_kad_query_facets' !== $sleutel ) {
+				update_post_meta( $nieuw_id, $sleutel, $args['default'] );
+			}
+		}
+
+		update_post_meta( $nieuw_id, '_kad_query_query', $instellingen );
+
+		$facetten = Kadence_MCP_Query::schrijf_facetten( $nieuw_id );
+		clean_post_cache( $nieuw_id );
+		$controle = get_post( $nieuw_id );
+
+		return array_merge(
+			$rapport,
+			array(
+				'new_id'  => (int) $nieuw_id,
+				'id_map'  => (object) $kaart,
+				'facets'  => is_wp_error( $facetten ) ? array() : ( isset( $facetten['computed'] ) ? $facetten['computed'] : array() ),
+				'created' => $controle && $controle->post_content === $inhoud,
+				'token'   => '',
+				'next'    => sprintf( __( 'Plaatsen: generate-section met recipe custom en één blok kadence/query met attrs {"id":%d}, daarna insert-blocks.', 'mcp-abilities-kadence' ), (int) $nieuw_id ),
+				'status'  => ( $controle && $controle->post_content === $inhoud )
+					? sprintf( __( 'Aangemaakt als post %1$d volgens de preset %2$s, teruggelezen. Opmaak van filter en paginering is die van Kadence\' preset; pas aan met style-blocks.', 'mcp-abilities-kadence' ), (int) $nieuw_id, $preset )
+					: __( 'LET OP: aangemaakt, maar de inhoud wijkt af bij het teruglezen.', 'mcp-abilities-kadence' ),
 			)
 		);
 	}

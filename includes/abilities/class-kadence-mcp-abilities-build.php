@@ -518,7 +518,12 @@ class Kadence_MCP_Abilities_Build {
 							),
 							'svg' => array(
 								'type'        => 'string',
-								'description' => __( 'Alleen bij kadence_vector: de SVG-code.', 'mcp-abilities-kadence' ),
+								'description' => __( 'Alleen bij kadence_vector: de SVG-code. Het voorstel rekent uit wat er na de sanitizer van Kadence en (zonder unfiltered_html) kses van WordPress van overblijft, en weigert als er elementen wegvallen.', 'mcp-abilities-kadence' ),
+							),
+							'accept_loss' => array(
+								'type'        => 'boolean',
+								'default'     => false,
+								'description' => __( 'Alleen bij kadence_vector: toch aanmaken als het voorstel voorspelt dat er SVG-elementen wegvallen.', 'mcp-abilities-kadence' ),
 							),
 							'token' => array( 'type' => 'string' ),
 						),
@@ -543,6 +548,115 @@ class Kadence_MCP_Abilities_Build {
 				),
 			),
 			array(
+				'name' => 'kadence/update-entity-content',
+				'args' => array(
+					'label'       => __( 'De inhoud van een vector of custom SVG bijwerken', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Vervangt tekst in de SVG van een kadence_vector of de JSON van een kadence_custom_svg, bijvoorbeeld een kleur.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Voor de twee Kadence-objecten waarvan de inhoud geen blokken zijn: een kadence_vector (kale SVG) en een kadence_custom_svg (een icoon als JSON, bijvoorbeeld kb-custom-112). Geef replace als lijst van {from, to, count}: count is het aantal keer dat from er nu moet staan, en klopt dat niet, dan gebeurt er niets — zo vervang je niet per ongeluk iets anders. Bij een vector wordt vooraf uitgerekend of kses (zonder unfiltered_html) elementen zou weghalen; bij een custom SVG moet de JSON geldig blijven. Twee stappen: eerst zonder token voor een voorstel (met de huidige inhoud in before), daarna met token. Er wordt teruggelezen.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+							'replace' => array(
+								'type'  => 'array',
+								'items' => array(
+									'type'       => 'object',
+									'properties' => array(
+										'from'             => array( 'type' => 'string' ),
+										'to'               => array( 'type' => 'string' ),
+										'count'            => array( 'type' => 'integer', 'minimum' => 0 ),
+										'case_insensitive' => array( 'type' => 'boolean' ),
+									),
+									'required'   => array( 'from', 'to' ),
+								),
+							),
+							'token' => array( 'type' => 'string' ),
+						),
+						'required'             => array( 'post_id', 'replace' ),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'update_entity_content' ),
+				),
+			),
+			array(
+				'name' => 'kadence/trash-post',
+				'args' => array(
+					'label'       => __( 'Een post in de prullenbak zetten', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Zet een pagina, bericht of Kadence-object in de prullenbak, na een controle waar het nog gebruikt wordt.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Zet één post in de prullenbak — nooit definitief verwijderen; dat blijft in het beheer, met een mens erbij. Vooraf wordt gezocht waar het object nog gebruikt wordt: op id-attribuut (zoals find-usages) en bij een custom SVG ook op de iconnaam kb-custom-{ID}. Is er gebruik, dan komt er geen token, want een verwijzing naar een post in de prullenbak laat het blok stil verdwijnen; geef ignore_usages: true als het toch de bedoeling is. Handig bij het opruimen van dubbel aangemaakte objecten. Twee stappen: eerst zonder token, daarna met token.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_id'       => array( 'type' => 'integer', 'minimum' => 1 ),
+							'ignore_usages' => array( 'type' => 'boolean', 'default' => false ),
+							'token'         => array( 'type' => 'string' ),
+						),
+						'required'             => array( 'post_id' ),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'trash_post' ),
+				),
+			),
+			array(
+				'name' => 'kadence/export-entity',
+				'args' => array(
+					'label'       => __( 'Een Kadence-object exporteren als pakket', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'Inhoud én _kad-instellingen van een navigatie, header, element, query, card of vector, met de ID\'s die op een andere site een kaart nodig hebben.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Leest een Kadence-object uit als één pakket: de blokken in post_content en de weergave-instellingen in _kad-meta (schaduwen, kleuren, plaatsing, breedtes) — het deel dat get-raw-markup en prepare-import niet meenemen. Noemt ook de posts en media waarnaar verwezen wordt, met type, titel, slug of bestandsnaam, zodat je hun tegenstuk op de andere site kunt opzoeken. Geef het pakket daarna aan import-entity op de andere site. Schrijft niets.', 'mcp-abilities-kadence' ),
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'post_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+						),
+						'required'             => array( 'post_id' ),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'export_entity' ),
+				),
+			),
+			array(
+				'name' => 'kadence/import-entity',
+				'args' => array(
+					'label'       => __( 'Een Kadence-object uit een pakket neerzetten', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Zet een pakket uit export-entity neer als nieuw object, of over een bestaand, met ID-kaarten en teruglezen.', 'mcp-abilities-kadence' ),
+					'description' => __( 'De overzetting van een Kadence-object zonder de schade van Kadence\' eigen export en import (die haalt backslashes uit de inhoud, zodat \\u002d u002d wordt en var(--…) en klassen stil breken). De inhoud gaat door dezelfde omzetting als prepare-import: replace ({from, to}, bijvoorbeeld het domein), post_map, media_map en term_map (oud ID → ID op deze site). De uniqueID\'s blijven gelijk, zodat find-post met unique_id het tegenstuk terugvindt. Met target_id wordt een bestaand object overschreven (inhoud met revisie, meta zonder); zonder target_id komt er een nieuw object, standaard als concept. Alleen meta-sleutels die Kadence hier registreert; ID\'s ín de meta worden niet omgezet en staan in meta_ids_to_check. Na het opslaan wordt byte voor byte teruggelezen. Twee stappen: eerst zonder token, daarna met token.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'package'   => array( 'type' => 'object', 'additionalProperties' => true, 'description' => __( 'Het veld package uit export-entity.', 'mcp-abilities-kadence' ) ),
+							'target_id' => array( 'type' => 'integer', 'minimum' => 1, 'description' => __( 'Optioneel: het bestaande object op deze site dat overschreven wordt.', 'mcp-abilities-kadence' ) ),
+							'post_map'  => array( 'type' => 'object', 'additionalProperties' => true ),
+							'media_map' => array( 'type' => 'object', 'additionalProperties' => true ),
+							'term_map'  => array( 'type' => 'object', 'additionalProperties' => true ),
+							'replace'   => array(
+								'type'  => 'array',
+								'items' => array(
+									'type'       => 'object',
+									'properties' => array(
+										'from' => array( 'type' => 'string' ),
+										'to'   => array( 'type' => 'string' ),
+									),
+								),
+							),
+							'status'    => array( 'type' => 'string', 'enum' => array( 'draft', 'publish' ) ),
+							'token'     => array( 'type' => 'string' ),
+						),
+						'required'             => array( 'package' ),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'import_entity' ),
+				),
+			),
+			array(
 				'name' => 'kadence/create-post',
 				'args' => array(
 					'label'       => __( 'Een bericht of een post van een eigen posttype aanmaken', 'mcp-abilities-kadence' ),
@@ -558,6 +672,7 @@ class Kadence_MCP_Abilities_Build {
 							'title'          => array( 'type' => 'string' ),
 							'slug'           => array( 'type' => 'string', 'description' => __( 'Optioneel; anders maakt WordPress hem uit de titel.', 'mcp-abilities-kadence' ) ),
 							'status'         => array( 'type' => 'string', 'enum' => array( 'draft', 'publish' ), 'default' => 'draft' ),
+							'date'           => array( 'type' => 'string', 'description' => __( 'Publicatiedatum, JJJJ-MM-DD of JJJJ-MM-DD UU:MM:SS in de tijdzone van de site. Zonder datum zet WordPress het moment van aanmaken — bij een overzetting meestal niet de bedoeling. Een datum in de toekomst met status publish wordt "gepland".', 'mcp-abilities-kadence' ) ),
 							'excerpt'        => array( 'type' => 'string' ),
 							'content'        => array( 'type' => 'string', 'description' => __( 'Optioneel: blokmarkup, bij voorkeur uit generate-section of prepare-import.', 'mcp-abilities-kadence' ) ),
 							'menu_order'     => array( 'type' => 'integer' ),
@@ -565,7 +680,7 @@ class Kadence_MCP_Abilities_Build {
 							'terms'          => array(
 								'type'                 => 'object',
 								'additionalProperties' => array( 'type' => 'array' ),
-								'description'          => __( 'Per taxonomie een lijst termen, op slug of ID: {"service_type":["transport-mode"]}.', 'mcp-abilities-kadence' ),
+								'description'          => __( 'Per taxonomie een lijst termen, op slug of ID: {"service_type":["transport-mode"]}. Een lege lijst betekent expliciet geen termen: {"category": []} voorkomt dat WordPress een bericht in de standaardcategorie (Uncategorized) zet. Wat WordPress er toch zelf bij zet, staat na het aanmaken in added_by_wordpress en vooraf in plan.wordpress_adds.', 'mcp-abilities-kadence' ),
 							),
 							'acf'            => array(
 								'type'                 => 'object',
@@ -2005,12 +2120,38 @@ class Kadence_MCP_Abilities_Build {
 			}
 		}
 
+		$boom = parse_blocks( $post->post_content );
+
+		// Twee stille fouten die niets met klassen te maken hebben, maar die je
+		// alleen ziet als je de hele boom afloopt.
+		$paletnamen   = Kadence_MCP_Inventory::zoek_paletnamen_buiten_kadence( $boom );
+		$zonder_id    = self::zonder_unique_id( $boom, $post->ID );
+		$extra_status = '';
+
+		if ( ! empty( $paletnamen ) ) {
+			$extra_status .= ' ' . sprintf(
+				/* translators: %d: number of blocks. */
+				__( '%d niet-Kadence-blokken hebben een Kadence-paletnaam in een kleurattribuut (palette_names); core kent die niet, dus de kleur wordt stil genegeerd. Te herstellen met set-attributes op het pad.', 'mcp-abilities-kadence' ),
+				count( $paletnamen )
+			);
+		}
+
+		if ( ! empty( $zonder_id ) ) {
+			$extra_status .= ' ' . sprintf(
+				/* translators: %d: number of blocks. */
+				__( '%d Kadence-blokken hebben geen uniqueID (missing_unique_id): Kadence schrijft dan geen eigen CSS en geen wrapperklasse voor dat blok. Elke vondst heeft een voorstel in Kadence-vorm, uniek in deze post; te zetten met set-attributes op het pad.', 'mcp-abilities-kadence' ),
+				count( $zonder_id )
+			);
+		}
+
 		return array(
 			'post'      => array( 'id' => $post->ID, 'title' => get_the_title( $post ), 'type' => $post->post_type ),
 			'checked'   => $gekeurd,
 			'findings'  => $bevindingen,
 			'repair'    => $herbouwbaar,
-			'status'    => empty( $bevindingen )
+			'palette_names'     => $paletnamen,
+			'missing_unique_id' => $zonder_id,
+			'status'    => ( empty( $bevindingen )
 				? sprintf(
 					/* translators: %d: number of blocks. */
 					__( '%d blokken nagelopen, de markup klopt overal met de attributen. Let op dat alleen de KLASSEN getoetst zijn, en alleen op bloktypes waarvan het profiel bekend is.', 'mcp-abilities-kadence' ),
@@ -2022,8 +2163,56 @@ class Kadence_MCP_Abilities_Build {
 					count( $bevindingen ),
 					$gekeurd,
 					implode( ', ', $herbouwbaar )
-				),
+				) ) . $extra_status,
 		);
+	}
+
+	/**
+	 * Kadence-blokken zonder uniqueID, met een voorstel.
+	 *
+	 * Kadence deelt een uniqueID uit in de editor. Een blok dat buiten de
+	 * editor ontstaat (een mega menu dat via code is opgebouwd, een dicht
+	 * submenu) mist hem, en krijgt dan geen eigen CSS en geen wrapperklasse —
+	 * zonder foutmelding. Alleen blokken waarvan het schema een uniqueID kent.
+	 *
+	 * @param array $boom    De boom.
+	 * @param int   $post_id De post; Kadence zet dat ID vóór de hash.
+	 *
+	 * @return array[]
+	 */
+	private static function zonder_unique_id( $boom, $post_id ) {
+		$bestaand = Kadence_MCP_Inventory::verzamel_unique_ids( $boom );
+		$treffers = array();
+		$loop     = static function ( $blokken, $pad ) use ( &$loop, &$treffers, &$bestaand, $post_id ) {
+			foreach ( $blokken as $i => $blok ) {
+				$hier = array_merge( $pad, array( (int) $i ) );
+				$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+
+				if ( 0 === strpos( $naam, Kadence_MCP_Inventory::BLOCK_PREFIX )
+					&& null !== Kadence_MCP_Inventory::attribuut_definitie( $naam, 'uniqueID' )
+					&& ( ! isset( $blok['attrs']['uniqueID'] ) || '' === trim( (string) $blok['attrs']['uniqueID'] ) ) ) {
+					// Kadence-vorm: {postID}_{6 hex}-{2 hex}, uniek in deze post.
+					do {
+						$hash    = substr( md5( $post_id . '|' . implode( '.', $hier ) . '|' . wp_rand() ), 0, 8 );
+						$voorstel = (int) $post_id . '_' . substr( $hash, 0, 6 ) . '-' . substr( $hash, 6, 2 );
+					} while ( isset( $bestaand[ $voorstel ] ) );
+
+					$bestaand[ $voorstel ] = array( $naam );
+					$treffers[]            = array(
+						'block'     => $naam,
+						'path'      => Kadence_MCP_Inventory::PAD_PREFIX . implode( '.', $hier ),
+						'suggested' => $voorstel,
+					);
+				}
+
+				if ( ! empty( $blok['innerBlocks'] ) ) {
+					$loop( $blok['innerBlocks'], $hier );
+				}
+			}
+		};
+		$loop( $boom, array() );
+
+		return $treffers;
 	}
 
 	/**
@@ -3562,6 +3751,19 @@ class Kadence_MCP_Abilities_Build {
 			}
 
 			$status = 'publish';
+
+			// Vooraf uitrekenen wat er van de SVG overblijft. Tot 1.26.0 ging dat
+			// stil mis: op staging bleef van 2679 tekens er 275 over, omdat het
+			// account geen unfiltered_html had en kses de paden weghaalde.
+			$voorspelling = self::voorspel_svg_opslag( $svg );
+
+			if ( $voorspelling['blocking'] && empty( $input['accept_loss'] ) ) {
+				return new WP_Error(
+					'kadence_mcp_svg_loss',
+					$voorspelling['note'],
+					array( 'prediction' => $voorspelling )
+				);
+			}
 		}
 
 		$token     = isset( $input['token'] ) ? (string) $input['token'] : '';
@@ -3581,6 +3783,7 @@ class Kadence_MCP_Abilities_Build {
 		if ( '' === $token ) {
 			return array_merge(
 				$rapport,
+				'kadence_vector' === $type ? array( 'svg_prediction' => $voorspelling ) : array(),
 				array(
 					'new_id'  => 0,
 					'created' => false,
@@ -3667,20 +3870,31 @@ class Kadence_MCP_Abilities_Build {
 				wp_update_post( array( 'ID' => $nieuw_id, 'post_name' => $slug ) );
 			}
 
-			$controle = get_post( $nieuw_id );
+			$controle  = get_post( $nieuw_id );
+			$opgeslagen = $controle ? (string) $controle->post_content : '';
+			$verlies    = self::svg_verlies( $svg, $opgeslagen );
 
 			return array_merge(
 				$rapport,
 				array(
 					'new_id'  => $nieuw_id,
-					'created' => (bool) $controle && '' !== trim( (string) $controle->post_content ),
+					'created' => '' !== trim( $opgeslagen ),
 					'token'   => '',
+					'svg'     => $verlies,
 					'next'    => sprintf(
 						/* translators: %d: post ID. */
 						__( 'Plaats hem met een blok kadence/vector met id %d (generate-section kan dat blok bouwen).', 'mcp-abilities-kadence' ),
 						$nieuw_id
 					),
-					'note'    => __( 'Aangemaakt via de route van Kadence; de inhoud is door de sanitizer van Kadence gegaan. Controleer de vector in de editor als er iets aan ontbreekt.', 'mcp-abilities-kadence' ),
+					'note'    => $verlies['lost']
+						? sprintf(
+							/* translators: 1: input length, 2: stored length, 3: lost elements. */
+							__( 'LET OP: aangemaakt, maar er is SVG verloren gegaan: %1$d tekens in, %2$d opgeslagen, weggevallen elementen: %3$s. Kijk met check-access of unfiltered_html ontbreekt; zo niet, dan heeft de sanitizer van Kadence ingegrepen.', 'mcp-abilities-kadence' ),
+							$verlies['input_length'],
+							$verlies['stored_length'],
+							implode( ', ', $verlies['lost_elements'] )
+						)
+						: __( 'Aangemaakt via de route van Kadence en teruggelezen: de SVG is heel opgeslagen (zelfde elementen als de invoer).', 'mcp-abilities-kadence' ),
 				)
 			);
 		}
@@ -3748,6 +3962,632 @@ class Kadence_MCP_Abilities_Build {
 	}
 
 	/**
+	 * Wat er van een SVG overblijft na de weg naar de database.
+	 *
+	 * Twee zeven: de SVG-sanitizer van Kadence (bij een nieuwe vector) en kses
+	 * van WordPress, die bij opslaan draait als het account geen
+	 * unfiltered_html heeft en elementen die hij niet kent (path, g, circle …)
+	 * gewoon weghaalt. Allebei zonder foutmelding.
+	 *
+	 * @param string $svg        De invoer.
+	 * @param bool   $sanitizer  Ook de sanitizer van Kadence toepassen.
+	 *
+	 * @return array
+	 */
+	private static function voorspel_svg_opslag( $svg, $sanitizer = true ) {
+		$stappen = array();
+		$uit     = (string) $svg;
+
+		if ( $sanitizer && class_exists( '\\KadenceWP\\KadenceBlocks\\enshrined\\svgSanitize\\Sanitizer' ) && class_exists( 'KadenceBlocksAllowedAttributes' ) ) {
+			$schoner = new \KadenceWP\KadenceBlocks\enshrined\svgSanitize\Sanitizer();
+			$schoner->removeRemoteReferences( true );
+			$schoner->setAllowedAttrs( new KadenceBlocksAllowedAttributes() );
+			$geschoond = $schoner->sanitize( $uit );
+			$uit       = false === $geschoond ? '' : (string) $geschoond;
+			$stappen[] = 'sanitizer van Kadence';
+		}
+
+		if ( ! current_user_can( 'unfiltered_html' ) ) {
+			$uit       = wp_unslash( wp_filter_post_kses( wp_slash( $uit ) ) );
+			$stappen[] = 'kses van WordPress (geen unfiltered_html)';
+		}
+
+		$verlies = self::svg_verlies( $svg, $uit );
+
+		$verlies['steps']    = $stappen;
+		$verlies['blocking'] = $verlies['lost'];
+		$verlies['note']     = $verlies['lost']
+			? sprintf(
+				/* translators: 1: steps, 2: input length, 3: output length, 4: elements. */
+				__( 'Deze SVG komt niet heel in de database (%1$s): %2$d tekens in, %3$d over, en deze elementen vallen weg: %4$s. Er is niets opgeslagen. Geef het account unfiltered_html (zie check-access), of vereenvoudig de SVG; wil je toch doorgaan, geef dan accept_loss: true.', 'mcp-abilities-kadence' ),
+				empty( $stappen ) ? __( 'geen zeef', 'mcp-abilities-kadence' ) : implode( ' + ', $stappen ),
+				$verlies['input_length'],
+				$verlies['stored_length'],
+				implode( ', ', $verlies['lost_elements'] )
+			)
+			: sprintf(
+				/* translators: %s: steps. */
+				__( 'De SVG komt heel in de database (%s).', 'mcp-abilities-kadence' ),
+				empty( $stappen ) ? __( 'geen zeef van toepassing', 'mcp-abilities-kadence' ) : implode( ' + ', $stappen )
+			);
+
+		return $verlies;
+	}
+
+	/**
+	 * Vergelijk twee SVG's op elementen.
+	 *
+	 * Op elementen en niet op lengte: de sanitizer herschrijft witruimte en
+	 * aanhalingstekens, en dat is geen verlies. Een verdwenen path wel.
+	 *
+	 * @param string $voor De invoer.
+	 * @param string $na   Wat er is opgeslagen of zou worden.
+	 *
+	 * @return array
+	 */
+	private static function svg_verlies( $voor, $na ) {
+		$tel = static function ( $svg ) {
+			preg_match_all( '/<([a-zA-Z][a-zA-Z0-9:-]*)\b/', (string) $svg, $m );
+
+			return array_count_values( array_map( 'strtolower', $m[1] ) );
+		};
+
+		$a       = $tel( $voor );
+		$b       = $tel( $na );
+		$weg     = array();
+
+		foreach ( $a as $element => $aantal ) {
+			$over = isset( $b[ $element ] ) ? $b[ $element ] : 0;
+
+			if ( $over < $aantal ) {
+				$weg[] = $element . ' (' . $aantal . ' → ' . $over . ')';
+			}
+		}
+
+		return array(
+			'input_length'  => strlen( (string) $voor ),
+			'stored_length' => strlen( (string) $na ),
+			'lost_elements' => $weg,
+			'lost'          => ! empty( $weg ) || ( '' !== trim( (string) $voor ) && '' === trim( (string) $na ) ),
+		);
+	}
+
+	/**
+	 * Vervang tekst in de inhoud van een bestaande vector of custom SVG.
+	 *
+	 * Voor wat de blokabilities niet raken: een kadence_vector bewaart een kale
+	 * SVG in post_content, een kadence_custom_svg een JSON-beschrijving. Een
+	 * kleur omzetten (#716D55 naar #5E5B4A) ging tot 1.26.0 via de REST API,
+	 * zonder toets. Hier met een verwacht aantal per vervanging, de
+	 * verliescontrole van create-entity, een token en teruglezen.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function update_entity_content( $input = array() ) {
+		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
+
+		if ( ! $post || ! in_array( $post->post_type, array( 'kadence_vector', 'kadence_custom_svg' ), true ) ) {
+			return new WP_Error( 'kadence_mcp_not_a_vector', __( 'Deze ability werkt alleen op een kadence_vector of kadence_custom_svg. Blokinhoud wijzig je met de blokabilities.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( ! current_user_can( 'read_post', $post->ID ) ) {
+			return new WP_Error( 'kadence_mcp_cannot_read', __( 'Dit account mag deze post niet lezen (zie check-access).', 'mcp-abilities-kadence' ) );
+		}
+
+		$vervangingen = isset( $input['replace'] ) && is_array( $input['replace'] ) ? $input['replace'] : array();
+
+		if ( empty( $vervangingen ) ) {
+			return new WP_Error( 'kadence_mcp_no_replace', __( 'Geef replace op: een lijst van {from, to, count}.', 'mcp-abilities-kadence' ) );
+		}
+
+		$inhoud = (string) $post->post_content;
+		$nieuw  = $inhoud;
+		$plan   = array();
+		$fouten = array();
+
+		foreach ( $vervangingen as $v ) {
+			$van   = isset( $v['from'] ) ? (string) $v['from'] : '';
+			$naar  = isset( $v['to'] ) ? (string) $v['to'] : '';
+			$hoofd = ! empty( $v['case_insensitive'] );
+
+			if ( '' === $van ) {
+				$fouten[] = __( 'Een vervanging zonder from.', 'mcp-abilities-kadence' );
+				continue;
+			}
+
+			$aantal = $hoofd ? substr_count( strtolower( $nieuw ), strtolower( $van ) ) : substr_count( $nieuw, $van );
+
+			if ( isset( $v['count'] ) && (int) $v['count'] !== $aantal ) {
+				$fouten[] = sprintf(
+					/* translators: 1: from, 2: found, 3: expected. */
+					__( '"%1$s" staat er %2$d keer, verwacht %3$d. Niets gedaan; controleer de inhoud met get-raw-markup.', 'mcp-abilities-kadence' ),
+					$van,
+					$aantal,
+					(int) $v['count']
+				);
+				continue;
+			}
+
+			$nieuw  = $hoofd ? str_ireplace( $van, $naar, $nieuw ) : str_replace( $van, $naar, $nieuw );
+			$plan[] = array( 'from' => $van, 'to' => $naar, 'count' => $aantal );
+		}
+
+		if ( ! empty( $fouten ) ) {
+			return new WP_Error( 'kadence_mcp_replace_mismatch', implode( ' ', $fouten ) );
+		}
+
+		if ( $nieuw === $inhoud ) {
+			return new WP_Error( 'kadence_mcp_nothing_to_replace', __( 'Er verandert niets: de from-waarden staan niet in de inhoud, of from en to zijn gelijk.', 'mcp-abilities-kadence' ) );
+		}
+
+		// De JSON van een custom SVG moet JSON blijven.
+		if ( 'kadence_custom_svg' === $post->post_type && null === json_decode( $nieuw ) ) {
+			return new WP_Error( 'kadence_mcp_svg_json', __( 'Na de vervanging is de inhoud geen geldige JSON meer; Kadence zou het icoon niet meer kunnen lezen.', 'mcp-abilities-kadence' ) );
+		}
+
+		$voorspelling = 'kadence_vector' === $post->post_type
+			? self::voorspel_svg_opslag( $nieuw, false )
+			: array( 'lost' => false, 'blocking' => false, 'note' => '' );
+
+		if ( $voorspelling['blocking'] ) {
+			return new WP_Error( 'kadence_mcp_svg_loss', $voorspelling['note'], array( 'prediction' => $voorspelling ) );
+		}
+
+		$verwacht = Kadence_MCP_Inventory::schrijf_token( $post, 'inhoud', $plan );
+		$token    = isset( $input['token'] ) ? (string) $input['token'] : '';
+		$rapport  = array(
+			'post'       => array( 'id' => $post->ID, 'title' => get_the_title( $post ), 'type' => $post->post_type ),
+			'replace'    => $plan,
+			'length'     => array( 'before' => strlen( $inhoud ), 'after' => strlen( $nieuw ) ),
+			'prediction' => $voorspelling,
+		);
+
+		if ( '' === $token ) {
+			return array_merge(
+				$rapport,
+				array(
+					'written' => false,
+					'token'   => $verwacht,
+					'status'  => __( 'Voorstel, er is NIETS opgeslagen. Er komt een revisie als de post dat ondersteunt, anders is dit veld before je weg terug. Roep opnieuw aan met het token om te schrijven.', 'mcp-abilities-kadence' ),
+					'before'  => $inhoud,
+				)
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) || ! current_user_can( 'edit_post', $post->ID ) ) {
+			return new WP_Error( 'kadence_mcp_write_denied', __( 'Geen kadence_mcp_write of geen bewerkrecht op deze post.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		if ( ! hash_equals( $verwacht, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $verwacht, $post ) );
+		}
+
+		$resultaat = wp_update_post( array( 'ID' => $post->ID, 'post_content' => wp_slash( $nieuw ) ), true );
+
+		if ( is_wp_error( $resultaat ) ) {
+			return $resultaat;
+		}
+
+		clean_post_cache( $post->ID );
+		$terug = (string) get_post_field( 'post_content', $post->ID );
+
+		return array_merge(
+			$rapport,
+			array(
+				'written' => $terug === $nieuw,
+				'token'   => '',
+				'status'  => $terug === $nieuw
+					? __( 'geschreven en teruggelezen: de inhoud staat er precies zo.', 'mcp-abilities-kadence' )
+					: __( 'LET OP: geschreven, maar de opgeslagen inhoud wijkt af van wat er verstuurd is — een filter of kses heeft ingegrepen. Vergelijk met get-raw-markup.', 'mcp-abilities-kadence' ),
+			)
+		);
+	}
+
+	/**
+	 * Zet een post in de prullenbak, na een controle waar hij nog gebruikt wordt.
+	 *
+	 * Alleen de prullenbak, nooit definitief verwijderen: daar is WordPress'
+	 * eigen scherm voor, met een mens erbij. Wordt het object nog ergens
+	 * opgenomen (een navigatie in een header, een vector in een pagina, een
+	 * custom SVG als icoon), dan komt er geen token tenzij ignore_usages aan
+	 * staat — want een verwijzing naar een post in de prullenbak laat het blok
+	 * stil verdwijnen.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function trash_post( $input = array() ) {
+		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
+
+		if ( ! $post ) {
+			return new WP_Error( 'kadence_mcp_post_not_found', __( 'Die post bestaat niet.', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( in_array( $post->post_type, array( 'attachment', 'revision', 'nav_menu_item', 'customize_changeset' ), true ) || 'trash' === $post->post_status ) {
+			return new WP_Error(
+				'kadence_mcp_trash_not_here',
+				'trash' === $post->post_status
+					? __( 'Deze post staat al in de prullenbak.', 'mcp-abilities-kadence' )
+					: sprintf( __( 'Een %s zet deze ability niet in de prullenbak; doe dat in het beheer.', 'mcp-abilities-kadence' ), $post->post_type )
+			);
+		}
+
+		if ( ! current_user_can( 'read_post', $post->ID ) ) {
+			return new WP_Error( 'kadence_mcp_cannot_read', __( 'Dit account mag deze post niet lezen (zie check-access).', 'mcp-abilities-kadence' ) );
+		}
+
+		// Waar wordt hij nog gebruikt? Op id-attribuut, en bij een custom SVG
+		// ook op zijn iconnaam kb-custom-{ID}.
+		$gebruik = Kadence_MCP_Abilities_Site::find_usages( array( 'object_id' => $post->ID, 'scan_limit' => 1000 ) );
+		$treffers = is_wp_error( $gebruik ) ? array() : $gebruik['usages'];
+
+		if ( 'kadence_custom_svg' === $post->post_type ) {
+			global $wpdb;
+
+			foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT ID, post_title, post_type, post_status FROM {$wpdb->posts} WHERE post_status NOT IN ('trash','inherit','auto-draft') AND post_type <> 'revision' AND post_content LIKE %s LIMIT 100", '%' . $wpdb->esc_like( 'kb-custom-' . $post->ID ) . '%' ) ) as $rij ) {
+				$treffers[] = array( 'id' => (int) $rij->ID, 'title' => $rij->post_title, 'post_type' => $rij->post_type, 'status' => $rij->post_status, 'hits' => 1, 'via' => 'kb-custom-' . $post->ID );
+			}
+		}
+
+		$negeer  = ! empty( $input['ignore_usages'] );
+		$rapport = array(
+			'post'   => array( 'id' => $post->ID, 'title' => get_the_title( $post ), 'type' => $post->post_type, 'status' => $post->post_status ),
+			'usages' => $treffers,
+		);
+
+		if ( ! empty( $treffers ) && ! $negeer ) {
+			return array_merge(
+				$rapport,
+				array(
+					'verdict' => 'riskant',
+					'trashed' => false,
+					'token'   => '',
+					'status'  => sprintf(
+						/* translators: %d: number of posts. */
+						__( 'Geen token: %d posts gebruiken dit object nog (usages). Een verwijzing naar een post in de prullenbak laat het blok stil verdwijnen. Haal de verwijzingen eerst weg, of geef ignore_usages: true als dat de bedoeling is.', 'mcp-abilities-kadence' ),
+						count( $treffers )
+					),
+				)
+			);
+		}
+
+		$verwacht = Kadence_MCP_Inventory::schrijf_token( $post, 'prullenbak', array( 'ignore_usages' => $negeer ) );
+		$token    = isset( $input['token'] ) ? (string) $input['token'] : '';
+
+		if ( '' === $token ) {
+			return array_merge(
+				$rapport,
+				array(
+					'verdict' => 'veilig',
+					'trashed' => false,
+					'token'   => $verwacht,
+					'status'  => empty( $treffers )
+						? __( 'Voorstel, er is NIETS gedaan. Het object wordt nergens gebruikt. Roep opnieuw aan met het token om hem in de prullenbak te zetten (terughalen kan vanuit de prullenbak).', 'mcp-abilities-kadence' )
+						: __( 'Voorstel, er is NIETS gedaan. Het object wordt nog gebruikt, maar ignore_usages staat aan. Roep opnieuw aan met het token om hem in de prullenbak te zetten.', 'mcp-abilities-kadence' ),
+				)
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) || ! current_user_can( 'delete_post', $post->ID ) ) {
+			return new WP_Error( 'kadence_mcp_write_denied', __( 'Geen kadence_mcp_write of geen recht om deze post te verwijderen.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		if ( ! hash_equals( $verwacht, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $verwacht, $post ) );
+		}
+
+		$uit = wp_trash_post( $post->ID );
+
+		return array_merge(
+			$rapport,
+			array(
+				'verdict' => 'veilig',
+				'trashed' => (bool) $uit && 'trash' === get_post_status( $post->ID ),
+				'token'   => '',
+				'status'  => ( $uit && 'trash' === get_post_status( $post->ID ) )
+					? __( 'In de prullenbak gezet. Terughalen kan in het beheer, onder Prullenbak van dit posttype.', 'mcp-abilities-kadence' )
+					: __( 'LET OP: de post staat niet in de prullenbak; WordPress of een plugin heeft het tegengehouden.', 'mcp-abilities-kadence' ),
+			)
+		);
+	}
+
+	/**
+	 * Een Kadence-object als pakket: inhoud, instellingen en wat erin verwijst.
+	 *
+	 * Een navigatie, header of element bestaat uit twee delen: de blokken in
+	 * post_content en de weergave in _kad-meta (schaduwen, kleuren, plaatsing).
+	 * get-raw-markup en prepare-import dragen alleen het eerste deel over. Dit
+	 * pakket draagt allebei, en noemt de ID's waarvoor op de andere site een
+	 * kaart nodig is. Schrijft niets.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function export_entity( $input = array() ) {
+		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
+
+		if ( ! $post || 0 !== strpos( (string) $post->post_type, 'kadence_' ) ) {
+			return new WP_Error( 'kadence_mcp_not_a_kadence_entity', __( 'Geef het ID van een Kadence-object (navigatie, header, element, query, card, vector, custom SVG).', 'mcp-abilities-kadence' ) );
+		}
+
+		if ( ! current_user_can( 'read_post', $post->ID ) ) {
+			return new WP_Error( 'kadence_mcp_cannot_read', __( 'Dit account mag deze post niet lezen (zie check-access).', 'mcp-abilities-kadence' ) );
+		}
+
+		$meta = array();
+
+		foreach ( get_post_meta( $post->ID ) as $sleutel => $waarden ) {
+			if ( 0 === strpos( (string) $sleutel, '_kad_' ) ) {
+				$meta[ $sleutel ] = maybe_unserialize( $waarden[0] );
+			}
+		}
+
+		ksort( $meta );
+
+		// Welke ID's staan erin? Die bestaan op de andere site onder een ander
+		// nummer; de kaarten van import-entity zetten ze om.
+		$verwijzingen = array( 'posts' => array(), 'media' => array() );
+		$loop         = static function ( $blokken ) use ( &$loop, &$verwijzingen ) {
+			foreach ( $blokken as $blok ) {
+				$naam  = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+				$attrs = isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ? $blok['attrs'] : array();
+
+				if ( isset( $attrs['id'] ) && is_numeric( $attrs['id'] ) && (int) $attrs['id'] > 0 && ! in_array( $naam, array( 'kadence/tab', 'kadence/slide', 'kadence/pane' ), true ) ) {
+					$doel = get_post( (int) $attrs['id'] );
+					$soort = $doel && 'attachment' === $doel->post_type ? 'media' : 'posts';
+
+					$verwijzingen[ $soort ][ (int) $attrs['id'] ] = array(
+						'id'    => (int) $attrs['id'],
+						'type'  => $doel ? $doel->post_type : '',
+						'title' => $doel ? get_the_title( $doel ) : '',
+						'slug'  => $doel ? $doel->post_name : '',
+						'block' => $naam,
+					);
+				}
+
+				foreach ( array( 'bgImgID', 'imgID', 'mediaId' ) as $sleutel ) {
+					if ( isset( $attrs[ $sleutel ] ) && is_numeric( $attrs[ $sleutel ] ) && (int) $attrs[ $sleutel ] > 0 ) {
+						$verwijzingen['media'][ (int) $attrs[ $sleutel ] ] = array(
+							'id'    => (int) $attrs[ $sleutel ],
+							'file'  => wp_basename( (string) get_attached_file( (int) $attrs[ $sleutel ] ) ),
+							'block' => $naam,
+						);
+					}
+				}
+
+				if ( ! empty( $blok['innerBlocks'] ) ) {
+					$loop( $blok['innerBlocks'] );
+				}
+			}
+		};
+		$loop( parse_blocks( $post->post_content ) );
+
+		return array(
+			'package'    => array(
+				'format'    => 'kadence-mcp-entity/1',
+				'source'    => home_url(),
+				'source_id' => $post->ID,
+				'post_type' => $post->post_type,
+				'title'     => $post->post_title,
+				'slug'      => $post->post_name,
+				'status'    => $post->post_status,
+				'content'   => $post->post_content,
+				'meta'      => (object) $meta,
+			),
+			'references' => array(
+				'posts' => array_values( $verwijzingen['posts'] ),
+				'media' => array_values( $verwijzingen['media'] ),
+			),
+			'status'     => sprintf(
+				/* translators: 1: meta keys, 2: post refs, 3: media refs. */
+				__( 'Pakket met de inhoud en %1$d _kad-instellingen. Er wordt verwezen naar %2$d posts en %3$d media; zoek hun tegenstuk op de andere site (op slug, titel of bestandsnaam) en geef die mee als post_map en media_map aan import-entity. ID\'s in de meta zelf (bijvoorbeeld paginavoorwaarden van een element) zet import-entity niet om; die staan in zijn voorstel onder meta_ids_to_check.', 'mcp-abilities-kadence' ),
+				count( $meta ),
+				count( $verwijzingen['posts'] ),
+				count( $verwijzingen['media'] )
+			),
+		);
+	}
+
+	/**
+	 * Zet een pakket uit export-entity neer: nieuw, of over een bestaand object.
+	 *
+	 * Bedoeld voor wat op 28-09-2026 misging: Kadence' eigen export en import
+	 * haalden de backslashes uit de inhoud (\u002d werd u002d) en braken zo
+	 * var(--…) en klassen, en daarna moest alles met eigen scripts rechtgezet.
+	 * Hier gaat de inhoud door dezelfde omzetting als prepare-import (replace,
+	 * post_map, media_map, term_map), wordt de blokmarkup op stabiliteit
+	 * getoetst, en na het opslaan byte voor byte teruggelezen.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function import_entity( $input = array() ) {
+		$pakket = isset( $input['package'] ) && is_array( $input['package'] ) ? $input['package'] : array();
+
+		if ( empty( $pakket['post_type'] ) || ! isset( $pakket['content'] ) || 'kadence-mcp-entity/1' !== ( isset( $pakket['format'] ) ? $pakket['format'] : '' ) ) {
+			return new WP_Error( 'kadence_mcp_bad_package', __( 'Geef package zoals export-entity het teruggeeft (format kadence-mcp-entity/1).', 'mcp-abilities-kadence' ) );
+		}
+
+		$type = (string) $pakket['post_type'];
+
+		if ( 0 !== strpos( $type, 'kadence_' ) || ! post_type_exists( $type ) ) {
+			return new WP_Error( 'kadence_mcp_entity_type_missing', sprintf( __( 'Het posttype %s bestaat op deze site niet.', 'mcp-abilities-kadence' ), $type ) );
+		}
+
+		$doel_id = isset( $input['target_id'] ) ? (int) $input['target_id'] : 0;
+		$doel    = $doel_id > 0 ? get_post( $doel_id ) : null;
+
+		if ( $doel_id > 0 && ( ! $doel || $doel->post_type !== $type ) ) {
+			return new WP_Error( 'kadence_mcp_bad_target', sprintf( __( 'target_id %1$d is geen %2$s op deze site.', 'mcp-abilities-kadence' ), $doel_id, $type ) );
+		}
+
+		// De inhoud: vervangen, ID's omzetten, stabiliteit toetsen.
+		$boom    = Kadence_MCP_Inventory::schoon_blokken( parse_blocks( (string) $pakket['content'] ) );
+		$gemeld  = array();
+
+		foreach ( ( isset( $input['replace'] ) && is_array( $input['replace'] ) ? $input['replace'] : array() ) as $paar ) {
+			if ( ! empty( $paar['from'] ) ) {
+				$aantal   = 0;
+				$boom     = self::vervang_in_boom( $boom, (string) $paar['from'], isset( $paar['to'] ) ? (string) $paar['to'] : '', $aantal );
+				$gemeld[] = array( 'from' => (string) $paar['from'], 'to' => isset( $paar['to'] ) ? (string) $paar['to'] : '', 'count' => $aantal );
+			}
+		}
+
+		$omgezet = array( 'media' => 0, 'terms' => 0, 'posts' => 0 );
+		$boom    = self::zet_ids_om(
+			$boom,
+			self::id_kaart( isset( $input['media_map'] ) ? $input['media_map'] : array() ),
+			self::id_kaart( isset( $input['term_map'] ) ? $input['term_map'] : array() ),
+			$omgezet,
+			self::id_kaart( isset( $input['post_map'] ) ? $input['post_map'] : array() )
+		);
+		$inhoud  = '' === trim( (string) $pakket['content'] ) ? '' : Kadence_MCP_Inventory::serialiseer( $boom );
+
+		if ( '' !== $inhoud && Kadence_MCP_Inventory::serialiseer( parse_blocks( $inhoud ) ) !== $inhoud ) {
+			return new WP_Error( 'kadence_mcp_unstable_markup', __( 'De inhoud overleeft een parse- en serialiseerronde niet; er is niets gedaan.', 'mcp-abilities-kadence' ) );
+		}
+
+		// Vectoren en custom SVG's zijn geen blokmarkup: letterlijk overnemen.
+		if ( in_array( $type, array( 'kadence_vector', 'kadence_custom_svg' ), true ) ) {
+			$inhoud = (string) $pakket['content'];
+
+			foreach ( $gemeld as $i => $paar ) {
+				$gemeld[ $i ]['count'] = substr_count( $inhoud, $paar['from'] );
+				$inhoud                = str_replace( $paar['from'], $paar['to'], $inhoud );
+			}
+		}
+
+		// De meta: alleen sleutels die Kadence voor dit posttype registreert.
+		$meta       = isset( $pakket['meta'] ) && ( is_array( $pakket['meta'] ) || is_object( $pakket['meta'] ) ) ? (array) $pakket['meta'] : array();
+		$bekend     = array_keys( get_registered_meta_keys( 'post', $type ) );
+		$onbekend   = array();
+		$ids_meta   = array();
+
+		foreach ( $meta as $sleutel => $waarde ) {
+			if ( ! empty( $bekend ) && ! in_array( $sleutel, $bekend, true ) && ! ( $doel && metadata_exists( 'post', $doel->ID, $sleutel ) ) ) {
+				$onbekend[] = $sleutel;
+			}
+
+			$tekst = is_scalar( $waarde ) ? (string) $waarde : wp_json_encode( $waarde );
+
+			if ( preg_match( '/"(id|ID|post|page|value)":\s*"?\d+/', (string) $tekst ) || ( preg_match( '/(_id|Id|ID)$/', $sleutel ) && is_numeric( $waarde ) && (int) $waarde > 0 ) ) {
+				$ids_meta[] = $sleutel;
+			}
+		}
+
+		if ( ! empty( $onbekend ) ) {
+			return new WP_Error(
+				'kadence_mcp_bad_meta_key',
+				sprintf(
+					/* translators: 1: keys, 2: post type. */
+					__( 'Deze sleutels registreert Kadence hier niet voor %2$s: %1$s. Staat er op deze site een andere Kadence-versie? Haal ze uit het pakket of werk Kadence bij.', 'mcp-abilities-kadence' ),
+					implode( ', ', $onbekend ),
+					$type
+				)
+			);
+		}
+
+		$voorstel = array(
+			'post_type'          => $type,
+			'title'              => (string) $pakket['title'],
+			'target'             => $doel ? array( 'id' => $doel->ID, 'title' => get_the_title( $doel ) ) : null,
+			'replace'            => $gemeld,
+			'ids_converted'      => $omgezet,
+			'meta_keys'          => count( $meta ),
+			'meta_ids_to_check'  => $ids_meta,
+			'content_length'     => strlen( $inhoud ),
+			'backslashes'        => substr_count( $inhoud, '\\' ),
+			'warnings'           => current_user_can( 'unfiltered_html' ) ? array() : array( __( 'Geen unfiltered_html: WordPress haalt bij het opslaan SVG en inline-HTML door kses. Zie check-access.', 'mcp-abilities-kadence' ) ),
+		);
+
+		$token    = isset( $input['token'] ) ? (string) $input['token'] : '';
+		$verwacht = 'kmcp1_' . substr( wp_hash( (string) wp_json_encode( array( $type, $doel ? $doel->ID . ':' . $doel->post_modified_gmt : 'nieuw', md5( $inhoud ), md5( wp_json_encode( $meta ) ), $pakket['title'] ) ) ), 0, 32 );
+
+		if ( '' === $token ) {
+			return array_merge(
+				$voorstel,
+				array(
+					'written' => false,
+					'token'   => $verwacht,
+					'status'  => $doel
+						? sprintf( __( 'Voorstel, er is NIETS opgeslagen. De inhoud en %1$d instellingen van %2$d worden overschreven (de inhoud krijgt een revisie, de meta niet). Kijk naar meta_ids_to_check: ID\'s daarin zijn niet omgezet. Roep opnieuw aan met het token.', 'mcp-abilities-kadence' ), count( $meta ), $doel->ID )
+						: sprintf( __( 'Voorstel, er is NIETS opgeslagen. Er komt een nieuwe %1$s "%2$s" met %3$d instellingen, als concept tenzij status publish is. Kijk naar meta_ids_to_check. Roep opnieuw aan met het token.', 'mcp-abilities-kadence' ), $type, (string) $pakket['title'], count( $meta ) ),
+				)
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) ) {
+			return new WP_Error( 'kadence_mcp_write_denied', __( 'Je hebt de capability kadence_mcp_write niet.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		$type_object = get_post_type_object( $type );
+
+		if ( $doel ? ! current_user_can( 'edit_post', $doel->ID ) : ! current_user_can( $type_object->cap->create_posts ) ) {
+			return new WP_Error( 'kadence_mcp_edit_denied', __( 'Geen recht om dit object aan te maken of te bewerken (zie check-access).', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		if ( ! hash_equals( $verwacht, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer, of het doel is intussen gewijzigd. Vraag opnieuw een voorstel.', 'mcp-abilities-kadence' ) );
+		}
+
+		$status = isset( $input['status'] ) && 'publish' === $input['status'] ? 'publish' : ( $doel ? $doel->post_status : 'draft' );
+		$velden = array(
+			'post_type'    => $type,
+			'post_title'   => (string) $pakket['title'],
+			'post_content' => wp_slash( $inhoud ),
+			'post_status'  => $status,
+		);
+
+		if ( $doel ) {
+			$velden['ID'] = $doel->ID;
+			$id           = wp_update_post( $velden, true );
+		} else {
+			$velden['post_name'] = isset( $pakket['slug'] ) ? sanitize_title( (string) $pakket['slug'] ) : '';
+			$id                  = wp_insert_post( $velden, true );
+		}
+
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+
+		foreach ( $meta as $sleutel => $waarde ) {
+			update_post_meta( (int) $id, $sleutel, wp_slash( $waarde ) );
+		}
+
+		clean_post_cache( (int) $id );
+
+		$afwijking = array();
+
+		if ( (string) get_post_field( 'post_content', (int) $id ) !== $inhoud ) {
+			$afwijking[] = 'content';
+		}
+
+		foreach ( $meta as $sleutel => $waarde ) {
+			if ( ! Kadence_MCP_Inventory::meta_gelijk( get_post_meta( (int) $id, $sleutel, true ), $waarde ) ) {
+				$afwijking[] = $sleutel;
+			}
+		}
+
+		return array_merge(
+			$voorstel,
+			array(
+				'id'       => (int) $id,
+				'written'  => empty( $afwijking ),
+				'mismatch' => $afwijking,
+				'token'    => '',
+				'status'   => empty( $afwijking )
+					? sprintf( __( 'Geschreven en teruggelezen: object %d, inhoud byte voor byte gelijk (ook de backslashes) en alle instellingen zoals in het pakket.', 'mcp-abilities-kadence' ), (int) $id )
+					: sprintf( __( 'LET OP: geschreven, maar dit wijkt af na het teruglezen: %s. Een filter of sanitizer heeft ingegrepen.', 'mcp-abilities-kadence' ), implode( ', ', $afwijking ) ),
+			)
+		);
+	}
+
+	/**
 	 * Maak een post van een publiek posttype.
 	 *
 	 * @param array $input De invoer.
@@ -3808,6 +4648,38 @@ class Kadence_MCP_Abilities_Build {
 		$status = ( isset( $input['status'] ) && 'publish' === $input['status'] ) ? 'publish' : 'draft';
 
 		list( $bezwaren, $plan, $termen, $acf_velden ) = self::toets_postvelden( $type, $object, $input );
+
+		// De publicatiedatum. Zonder datum zet WordPress het moment van
+		// aanmaken; bij een overzetting is dat zelden de bedoeling.
+		$datum = isset( $input['date'] ) ? trim( (string) $input['date'] ) : '';
+
+		if ( '' !== $datum ) {
+			$tijd = strtotime( $datum );
+
+			if ( false === $tijd || ! preg_match( '/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/', $datum ) ) {
+				$bezwaren[] = sprintf( __( 'De datum "%s" is niet te lezen. Gebruik JJJJ-MM-DD of JJJJ-MM-DD UU:MM:SS, in de tijdzone van de site.', 'mcp-abilities-kadence' ), $datum );
+			} else {
+				$plan['date'] = gmdate( 'Y-m-d H:i:s', $tijd );
+
+				if ( 'publish' === $status && $tijd > current_time( 'timestamp' ) ) {
+					$plan['date_note'] = __( 'de datum ligt in de toekomst: WordPress zet de post dan op "gepland" (future) in plaats van gepubliceerd.', 'mcp-abilities-kadence' );
+				}
+			}
+		}
+
+		// Wat WordPress er zelf bij zou zetten, vooraf gemeld.
+		if ( in_array( 'category', get_object_taxonomies( $type ), true ) && ! isset( $termen['category'] ) ) {
+			$standaard = get_term( (int) get_option( 'default_category' ), 'category' );
+			$plan['wordpress_adds'][] = sprintf(
+				/* translators: %s: category name. */
+				__( 'categorie "%s" (de standaardcategorie; geef terms {"category": []} voor geen categorie)', 'mcp-abilities-kadence' ),
+				$standaard && ! is_wp_error( $standaard ) ? $standaard->name : 'Uncategorized'
+			);
+		}
+
+		if ( ! isset( $plan['date'] ) ) {
+			$plan['wordpress_adds'][] = __( 'de datum van nu als publicatiedatum (geef date mee om dat te voorkomen)', 'mcp-abilities-kadence' );
+		}
 
 		// Inhoud: dezelfde rondgang als create-page.
 		$markup = isset( $input['content'] ) ? (string) $input['content'] : '';
@@ -3885,18 +4757,22 @@ class Kadence_MCP_Abilities_Build {
 			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer. Roep opnieuw zonder token aan en gebruik het token dat je dan terugkrijgt.', 'mcp-abilities-kadence' ) );
 		}
 
-		$nieuw_id = wp_insert_post(
-			array(
-				'post_type'    => $type,
-				'post_status'  => $status,
-				'post_title'   => $titel,
-				'post_name'    => $slug,
-				'post_excerpt' => isset( $plan['excerpt'] ) ? $plan['excerpt'] : '',
-				'menu_order'   => isset( $plan['menu_order'] ) ? $plan['menu_order'] : 0,
-				'post_content' => wp_slash( $markup ),
-			),
-			true
+		$velden = array(
+			'post_type'    => $type,
+			'post_status'  => $status,
+			'post_title'   => $titel,
+			'post_name'    => $slug,
+			'post_excerpt' => isset( $plan['excerpt'] ) ? $plan['excerpt'] : '',
+			'menu_order'   => isset( $plan['menu_order'] ) ? $plan['menu_order'] : 0,
+			'post_content' => wp_slash( $markup ),
 		);
+
+		if ( isset( $plan['date'] ) ) {
+			$velden['post_date']     = $plan['date'];
+			$velden['post_date_gmt'] = get_gmt_from_date( $plan['date'] );
+		}
+
+		$nieuw_id = wp_insert_post( $velden, true );
 
 		if ( is_wp_error( $nieuw_id ) ) {
 			return $nieuw_id;
@@ -3908,6 +4784,22 @@ class Kadence_MCP_Abilities_Build {
 
 		foreach ( $termen as $taxonomie => $ids ) {
 			wp_set_object_terms( $nieuw_id, $ids, $taxonomie );
+		}
+
+		// Wat WordPress er uit zichzelf bij heeft gezet: termen in een
+		// taxonomie waar niets voor gevraagd was.
+		$erbij = array();
+
+		foreach ( get_object_taxonomies( $type ) as $taxonomie ) {
+			if ( isset( $termen[ $taxonomie ] ) ) {
+				continue;
+			}
+
+			$staat = wp_get_object_terms( $nieuw_id, $taxonomie, array( 'fields' => 'slugs' ) );
+
+			if ( ! is_wp_error( $staat ) && ! empty( $staat ) ) {
+				$erbij[ $taxonomie ] = $staat;
+			}
 		}
 
 		// Op veldsleutel en niet op naam: bij een nieuwe post bestaat er nog
@@ -3953,6 +4845,8 @@ class Kadence_MCP_Abilities_Build {
 				'url'      => (string) get_permalink( $nieuw_id ),
 				'created'  => true,
 				'mismatch' => $afwijking,
+				'date'     => $controle ? $controle->post_date : '',
+				'added_by_wordpress' => (object) $erbij,
 				'token'    => '',
 				'note'     => empty( $afwijking )
 					? sprintf(
@@ -4292,6 +5186,14 @@ class Kadence_MCP_Abilities_Build {
 
 					$termen[ $taxonomie ][] = (int) $gevonden->term_id;
 					$plan['terms'][ $taxonomie ][] = $gevonden->slug;
+				}
+
+				// Een expliciet lege lijst betekent "geen termen in deze
+				// taxonomie" — ook niet de standaardcategorie die WordPress bij
+				// een bericht zelf toekent (Uncategorized).
+				if ( array() === (array) $lijst && in_array( $taxonomie, $eigen, true ) ) {
+					$termen[ $taxonomie ]         = array();
+					$plan['terms'][ $taxonomie ] = array();
 				}
 			}
 		}

@@ -3,7 +3,7 @@
 Geeft een MCP-agent toegang tot Kadence Blocks, Kadence Blocks Pro, Kadence Pro
 en het Kadence-thema, via de WordPress Abilities API.
 
-**Veertig abilities: negentien lezen, eenentwintig schrijven.**
+**Achtenveertig abilities: drieëntwintig lezen, vijfentwintig schrijven.**
 
 Schrijven is hier dus geen uitzondering. Elke schrijfability vraagt drie dingen:
 de capability `kadence_mcp_write` (die bij installatie aan niemand wordt
@@ -40,6 +40,10 @@ post.
 | `kadence/validate-write` | toetst een voorgenomen wijziging — schrijft niets |
 | `kadence/verify-markup` | vindt blokken waarvan de klassen niet meer bij de attributen passen |
 | `kadence/prepare-import` | controleert markup uit de editor of van een andere site, zet uniqueIDs om, zet media-, term- en post-ID's om volgens een opgegeven kaart, meldt verwijzingen en geeft een token voor `insert-blocks` — schrijft niets |
+| `kadence/check-access` | wat dit account per posttype mag lezen en bewerken, en welke rechten (`edit_theme_options`, `unfiltered_html`) ontbreken |
+| `kadence/audit-colors` | per kleurwaarde waar hij staat: blokattributen, Kadence-meta en typografie, met hex die gelijk is aan een paletkleur apart gemeld |
+| `kadence/site-fingerprint` | hashes van palet, typografie, fonts, termen, Kadence-objecten en plugins, om twee sites structureel te vergelijken |
+| `kadence/export-entity` | een Kadence-object als pakket: inhoud én `_kad`-instellingen, met de ID's die op een andere site een kaart nodig hebben |
 
 ### Schrijven
 
@@ -58,6 +62,10 @@ post.
 | `kadence/update-post` | een bestaande post van zo een posttype bijwerken: titel, slug, samenvatting, volgorde, afbeelding, termen en ACF-velden — ACF en termen zonder revisie |
 | `kadence/create-entity` | een lege navigatie, header of element met de volledige set instellingen van Kadence, of een vector uit een SVG — standaard als concept |
 | `kadence/set-page-status` | concept naar gepubliceerd, of terug |
+| `kadence/replace-colors` | kleuren omzetten over de hele site met een kaart {oud: nieuw}, met bewuste uitzonderingen (opacity, core-blokken, Gravity Forms) |
+| `kadence/update-entity-content` | tekst vervangen in de SVG van een vector of de JSON van een custom SVG, met verwacht aantal en verliescontrole |
+| `kadence/trash-post` | een post in de prullenbak, na een controle waar hij nog gebruikt wordt — nooit definitief |
+| `kadence/import-entity` | een pakket uit `export-entity` neerzetten, nieuw of over een bestaand object, met ID-kaarten en byte-voor-byte teruglezen |
 | `kadence/create-query` | een Query Loop kopiëren, met verse `uniqueID`s |
 | `kadence/set-query` | wat een Query Loop ophaalt — post meta |
 | `kadence/sync-query-facets` | de facetten weer laten kloppen met de filterblokken — post meta |

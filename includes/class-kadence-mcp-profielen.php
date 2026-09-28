@@ -91,6 +91,9 @@ class Kadence_MCP_Profielen {
 				'vsdesk'   => 'kvs-lg-false',
 				'vstablet' => 'kvs-md-false',
 				'vsmobile' => 'kvs-sm-false',
+				// Tussen kvs-* en is-sticky: dat is de volgorde van de
+				// classnames-aanroep in save() (dist/blocks-column.js, 3.7.11).
+				'link'     => 'kb-section-has-link',
 				'sticky'   => 'kb-section-is-sticky',
 			),
 		),
@@ -129,6 +132,18 @@ class Kadence_MCP_Profielen {
 			'klasse'     => 'kb-advanced-slide-overlay',
 			'html'       => '<div class="kb-advanced-slide-overlay"></div>',
 		),
+		// De link van een Sectie: een lege <a> over de hele kaart, na de
+		// binnenste div. Afgelezen uit de save() van kadence/column
+		// (dist/blocks-column.js, 3.7.11): href uit link, target _blank bij
+		// linkTarget, rel "noopener noreferrer" bij linkTarget plus nofollow en
+		// sponsored, aria-label uit linkTitle.
+		'{SECTIELINK}' => array(
+			'soort'      => 'element',
+			'overal'     => true,
+			'attributen' => array( 'link' ),
+			'klasse'     => 'kb-section-link-overlay',
+			'bouw'       => 'sectielink',
+		),
 	);
 
 	/**
@@ -144,8 +159,6 @@ class Kadence_MCP_Profielen {
 	 */
 	const ONGEDEKTE_MARKUP_ATTRS = array(
 		'kadence/column' => array(
-			// kb-section-has-link
-			'link',
 			// align{full|wide}
 			'align',
 			// inner-column-{id}
@@ -221,9 +234,9 @@ class Kadence_MCP_Profielen {
 				// kadence-column{ID}, kvs-*, is-sticky, kb-section-dir-*, en
 				// helemaal achteraan het vrije className uit useBlockProps.
 				'open'    => '<div class="wp-block-kadence-column kadence-column{ID}{ZICHTBAAR}{RICHTING}{KLEUR}{KLASSE}"><div class="kt-inside-inner-col">',
-				'sluit'   => '</div></div>',
-				'klassen' => array( '{ZICHTBAAR}', '{RICHTING}', '{KLEUR}', '{KLASSE}' ),
-				'markup_attrs' => array( 'direction', 'vsdesk', 'vstablet', 'vsmobile', 'sticky', 'className' ),
+				'sluit'   => '</div>{SECTIELINK}</div>',
+				'klassen' => array( '{ZICHTBAAR}', '{RICHTING}', '{KLEUR}', '{KLASSE}', '{SECTIELINK}' ),
+				'markup_attrs' => array( 'direction', 'vsdesk', 'vstablet', 'vsmobile', 'sticky', 'className', 'link', 'linkTitle', 'linkTarget', 'linkNoFollow', 'linkSponsored' ),
 				'waardenlijsten' => array(
 					// Afgelezen uit dist/blocks-column.js (3.7.8). De werkbalk biedt
 					// top, middle, bottom en stretch; het paneel "Vertical
@@ -274,6 +287,10 @@ class Kadence_MCP_Profielen {
 					// (3.7.11). inherit en inherit-secondary nemen de knopstijl
 					// van het THEMA over; fill is Kadence' eigen gevulde knop.
 					'inheritStyles' => array( 'fill', 'outline', 'inherit', 'inherit-secondary' ),
+					// Afgelezen uit de opties van "Button Width" in
+					// dist/blocks-singlebtn.js (3.7.11): automatisch, vast
+					// (width + widthUnit) of de volle breedte.
+					'widthType'     => array( 'auto', 'fixed', 'full' ),
 				),
 				'let_op' => 'Het icoon heeft geen eigen achtergrond: iconColor en iconColorHover kleuren alleen het pictogram. Kadence geeft de knop overflow: hidden en een ::before-laag die bij backgroundHoverType gradient de hoverkleur draagt; in de editor krijgt die laag bij kb-btn-global-fill de hoverkleur van de themaknop. De editor bouwt de knop met andere klassen (.kt-button, .kt-btn-svg-icon, .kt-button-text) dan de voorkant (.kb-button, .kb-svg-icon-wrap, .kt-btn-inner-text).',
 			),
@@ -301,6 +318,33 @@ class Kadence_MCP_Profielen {
 				'open'  => '<div class="wp-block-kadence-single-icon kt-svg-style-default kt-svg-icon-wrap kt-svg-item-{ID}"><span data-name="{ATTR:icon}" data-stroke="{ATTR:width}" class="kadence-dynamic-icon">',
 				'sluit' => '</span></div>',
 				'let_op' => 'Hoort altijd in een kadence/icon. Het attribuut icon is een naam als fe_tag of fas_euro-sign; die namen verzin je niet maar lees je af van een bestaand blok. De span blijft leeg — Kadence zet daar bij het tonen de SVG in — maar de data-attributen erop moeten kloppen, want daar leest hij de naam en de lijndikte uit. Een icoon met link (attribuut link) kan hier niet gebouwd of herbouwd worden: dan staat er een <a class="kt-svg-icon-link"> om de span, met target, rel, aria-label en data-title die van andere attributen afhangen. Kopieer zo een icoon met duplicate-blocks of prepare-import, of wijzig het in de editor.',
+			),
+
+			// Het zoekblok. Niet te genereren: de editor legt er een vergrendelde
+			// template in (templateLock "all") met een kadence/advancedbtn en
+			// daarin een kadence/singlebtn met isSubmit, hideLink en
+			// noCustomDefaults — afgelezen uit dist/blocks-search.js (3.7.11).
+			// Bij displayStyle "modal" wordt dat ook de knop die het venster
+			// opent. Een zelfgebouwd zoekblok zonder die kinderen heeft geen
+			// verzendknop, en de editor zet ze er bij openen terug met nieuwe
+			// uniqueID's.
+			'kadence/search' => array(
+				'bouwbaar' => false,
+				'let_op'   => 'Het zoekblok heeft een vergrendelde template: een kadence/advancedbtn met een kadence/singlebtn (isSubmit, hideLink, noCustomDefaults) als verzendknop, en bij displayStyle "modal" als knop die het venster opent. Dat is niet te genereren. Kopieer een bestaand zoekblok (bijvoorbeeld uit de header) met duplicate-blocks, of zet het via prepare-import over; pas daarna de attributen aan met style-blocks.',
+			),
+
+			// Het off-canvaspaneel van de header. Alleen waardenlijsten: niet
+			// bouwbaar, want het hangt aan de header en zijn trigger. Afgelezen
+			// uit de opties in dist/blocks-header.js (3.7.11); de Tablet- en
+			// Mobile-varianten zijn leeg als ze de desktopwaarde overnemen.
+			'kadence/off-canvas' => array(
+				'bouwbaar'       => false,
+				'waardenlijsten' => array(
+					'slideFrom'        => array( 'left', 'right' ),
+					'slideFromTablet'  => array( '', 'left', 'right' ),
+					'slideFromMobile'  => array( '', 'left', 'right' ),
+					'widthType'        => array( 'partial', 'full' ),
+				),
 			),
 
 			// Post Grid (Blocks Pro). Zelfsluitend: de hele kaart wordt bij het
@@ -631,6 +675,11 @@ class Kadence_MCP_Profielen {
 
 				// Een element is geen klasse maar HTML; het komt zonder spatie
 				// ervoor in het sjabloon.
+				if ( isset( $regel['bouw'] ) && 'sectielink' === $regel['bouw'] ) {
+					$uit[ $plaatshouder ] = $aanwezig ? self::sectielink( $attrs ) : '';
+					continue;
+				}
+
 				$uit[ $plaatshouder ] = $aanwezig ? $regel['html'] : '';
 				continue;
 			}
@@ -658,6 +707,50 @@ class Kadence_MCP_Profielen {
 		}
 
 		return $uit;
+	}
+
+	/**
+	 * De link-overlay van een Sectie, zoals save() hem schrijft.
+	 *
+	 * @param array $attrs De attributen.
+	 *
+	 * @return string
+	 */
+	private static function sectielink( $attrs ) {
+		// Zoals escapeAttribute() van @wordpress/element: &, " en < omzetten,
+		// een enkel aanhalingsteken niet — anders wijkt een dynamische link
+		// ([kb-dynamic field='post|post_url']) af van wat de editor schrijft.
+		$attribuut = static function ( $waarde ) {
+			$waarde = preg_replace( '/&(?!([a-z0-9]+|#[0-9]+|#x[a-f0-9]+);)/i', '&amp;', (string) $waarde );
+
+			return str_replace( array( '"', '<' ), array( '&quot;', '&lt;' ), $waarde );
+		};
+
+		$rel = ! empty( $attrs['linkTarget'] ) ? 'noopener noreferrer' : '';
+
+		if ( ! empty( $attrs['linkNoFollow'] ) ) {
+			$rel = '' === $rel ? 'nofollow' : $rel . ' nofollow';
+		}
+
+		if ( ! empty( $attrs['linkSponsored'] ) ) {
+			$rel = '' === $rel ? 'sponsored' : $rel . ' sponsored';
+		}
+
+		$html = '<a href="' . $attribuut( $attrs['link'] ) . '" class="kb-section-link-overlay"';
+
+		if ( ! empty( $attrs['linkTarget'] ) ) {
+			$html .= ' target="_blank"';
+		}
+
+		if ( '' !== $rel ) {
+			$html .= ' rel="' . $rel . '"';
+		}
+
+		if ( isset( $attrs['linkTitle'] ) && '' !== (string) $attrs['linkTitle'] ) {
+			$html .= ' aria-label="' . $attribuut( $attrs['linkTitle'] ) . '"';
+		}
+
+		return $html . '></a>';
 	}
 
 	/**

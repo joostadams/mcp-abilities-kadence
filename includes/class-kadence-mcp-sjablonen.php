@@ -587,6 +587,20 @@ class Kadence_MCP_Sjablonen {
 
 			$bloknaam = (string) $knoop['block'];
 
+			if ( ! Kadence_MCP_Profielen::bekend( $bloknaam ) && Kadence_MCP_Profielen::heeft_profiel( $bloknaam ) ) {
+				$profiel = Kadence_MCP_Profielen::van( $bloknaam );
+
+				return new WP_Error(
+					'kadence_mcp_tree_not_buildable',
+					sprintf(
+						/* translators: 1: block name, 2: explanation. */
+						__( '"%1$s" is bekend maar bewust niet te bouwen: %2$s', 'mcp-abilities-kadence' ),
+						$bloknaam,
+						'' !== (string) $profiel['let_op'] ? (string) $profiel['let_op'] : __( 'kopieer een bestaand exemplaar met duplicate-blocks of prepare-import.', 'mcp-abilities-kadence' )
+					)
+				);
+			}
+
 			if ( ! Kadence_MCP_Profielen::bekend( $bloknaam ) ) {
 				return new WP_Error(
 					'kadence_mcp_tree_unknown_block',

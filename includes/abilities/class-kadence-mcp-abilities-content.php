@@ -51,7 +51,7 @@ class Kadence_MCP_Abilities_Content {
 				'args' => array(
 					'label'       => __( 'De blokopbouw van een post bekijken', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'De blokkenboom van een pagina, header of element — namen, nesting, uniqueID en metadata.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Leest de blokstructuur van een post zonder hem te wijzigen. Werkt op gewone pagina\'s en berichten én op de Kadence-posttypes. Geeft per blok de naam, de nestingdiepte, het aantal kindblokken en een beperkte set attributen — standaard uniqueID, id, className, align en metadata. In metadata zit de naam uit de lijstweergave en blockVisibility; staat die laatste op false, dan is het blok verborgen met de native verbergoptie van WordPress en zie je dat nergens anders aan. Grote of geneste attribuutwaarden worden samengevat; wil je er een ongekort zien, noem hem dan in full_attributes. Vraag extra attributen gericht op — een volledige dump van een opgemaakte pagina is duizenden regels. De zichtbare tekst krijg je alleen met include_text: blokken als kadence/listitem en kadence/advancedheading bewaren hun tekst in de markup, niet in een attribuut.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Leest de blokstructuur van een post zonder hem te wijzigen. Werkt op gewone pagina\'s en berichten én op de Kadence-posttypes. Geeft per blok de naam, de nestingdiepte, het aantal kindblokken en een beperkte set attributen — standaard uniqueID, id, className, align en metadata. In metadata zit de naam uit de lijstweergave en blockVisibility; staat die laatste op false, dan is het blok verborgen met de native verbergoptie van WordPress en zie je dat nergens anders aan. Grote of geneste attribuutwaarden worden samengevat; wil je er een ongekort zien, noem hem dan in full_attributes. Vraag extra attributen gericht op — een volledige dump van een opgemaakte pagina is duizenden regels. De zichtbare tekst krijg je alleen met include_text: blokken als kadence/listitem en kadence/advancedheading bewaren hun tekst in de markup, niet in een attribuut. Een blok zonder uniqueID (core-blokken, het formulierblok van Gravity Forms) krijgt een veld path, bijvoorbeeld "pad:3.0.1": dat is zijn plek in de boom, en validate-write, set-attributes, style-blocks, get-raw-markup en from_unique_id nemen het aan in plaats van een uniqueID. Een pad verschuift als er ervóór blokken bijkomen of weggaan; het token vangt dat af omdat het aan de wijzigingsdatum hangt.', 'mcp-abilities-kadence' ),
 					'input_schema' => array(
 						'type'       => 'object',
 						'properties' => array(
@@ -122,7 +122,13 @@ class Kadence_MCP_Abilities_Content {
 							),
 							'unique_id' => array(
 								'type'        => 'string',
-								'description' => __( 'Alleen de markup van dit blok in plaats van de hele post.', 'mcp-abilities-kadence' ),
+								'description' => __( 'Alleen de markup van dit blok in plaats van de hele post: een uniqueID, of een pad uit inspect-post ("pad:3.0.1").', 'mcp-abilities-kadence' ),
+							),
+							'offset' => array(
+								'type'        => 'integer',
+								'minimum'     => 0,
+								'default'     => 0,
+								'description' => __( 'Begin bij dit teken. Bij een lange post: lees in stukken met next_offset uit het vorige antwoord.', 'mcp-abilities-kadence' ),
 							),
 							'max_chars' => array(
 								'type'    => 'integer',
@@ -205,7 +211,10 @@ class Kadence_MCP_Abilities_Content {
 						'type'       => 'object',
 						'properties' => array(
 							'post_id'   => array( 'type' => 'integer', 'minimum' => 1 ),
-							'unique_id' => array( 'type' => 'string' ),
+							'unique_id' => array(
+								'type'        => 'string',
+								'description' => __( 'De uniqueID van het blok, of voor een blok zonder uniqueID (core, Gravity Forms) zijn pad uit inspect-post, bijvoorbeeld "pad:3.0.1".', 'mcp-abilities-kadence' ),
+							),
 							'attributes' => array(
 								'type'                 => 'object',
 								'description'          => __( 'De te schrijven attributen. Moeten exact overeenkomen met wat validate-write heeft getoetst.', 'mcp-abilities-kadence' ),
@@ -252,7 +261,10 @@ class Kadence_MCP_Abilities_Content {
 								'items'       => array(
 									'type'       => 'object',
 									'properties' => array(
-										'unique_id'  => array( 'type' => 'string' ),
+										'unique_id'  => array(
+											'type'        => 'string',
+											'description' => __( 'De uniqueID van het blok, of voor een blok zonder uniqueID (core, Gravity Forms) zijn pad uit inspect-post, bijvoorbeeld "pad:3.0.1".', 'mcp-abilities-kadence' ),
+										),
 										'attributes' => array( 'type' => 'object', 'additionalProperties' => true ),
 									),
 									'required'   => array( 'unique_id', 'attributes' ),
@@ -354,7 +366,10 @@ class Kadence_MCP_Abilities_Content {
 						'type'       => 'object',
 						'properties' => array(
 							'post_id'   => array( 'type' => 'integer', 'minimum' => 1 ),
-							'unique_id' => array( 'type' => 'string' ),
+							'unique_id' => array(
+								'type'        => 'string',
+								'description' => __( 'De uniqueID van het blok, of voor een blok zonder uniqueID (core, Gravity Forms) zijn pad uit inspect-post, bijvoorbeeld "pad:3.0.1".', 'mcp-abilities-kadence' ),
+							),
 							'attributes' => array(
 								'type'                 => 'object',
 								'description'          => __( 'De voorgenomen wijzigingen als attribuutnaam naar nieuwe waarde.', 'mcp-abilities-kadence' ),
@@ -398,7 +413,7 @@ class Kadence_MCP_Abilities_Content {
 							),
 							'unique_id' => array(
 								'type'        => 'string',
-								'description' => __( 'Het blok waarop je wil schrijven.', 'mcp-abilities-kadence' ),
+								'description' => __( 'De uniqueID van het blok, of voor een blok zonder uniqueID (core, Gravity Forms) zijn pad uit inspect-post, bijvoorbeeld "pad:3.0.1".', 'mcp-abilities-kadence' ),
 							),
 							'attributes' => array(
 								'type'                 => 'object',
@@ -572,6 +587,9 @@ class Kadence_MCP_Abilities_Content {
 
 		if ( '' !== $vanaf ) {
 			$start = Kadence_MCP_Inventory::zoek_op_unique_id( $boom, $vanaf );
+			$basis = Kadence_MCP_Inventory::is_pad( $vanaf )
+				? Kadence_MCP_Inventory::pad_indexen( $vanaf )
+				: Kadence_MCP_Inventory::pad_van_unique_id( $boom, $vanaf );
 
 			if ( null === $start ) {
 				return new WP_Error(
@@ -585,7 +603,12 @@ class Kadence_MCP_Abilities_Content {
 				);
 			}
 
-			$boom = array( $start );
+			// De sleutel van het startblok bewaren, zodat de paden in de uitvoer
+			// gelden voor de hele post en niet vanaf dit blok.
+			$pad_ouder = is_array( $basis ) ? array_slice( $basis, 0, -1 ) : array();
+			$boom      = array( ( is_array( $basis ) ? (int) end( $basis ) : 0 ) => $start );
+		} else {
+			$pad_ouder = array();
 		}
 
 		// Eén blok meer ophalen dan gevraagd: alleen zo is het verschil te zien
@@ -601,7 +624,8 @@ class Kadence_MCP_Abilities_Content {
 				'alleen_kadence' => ! empty( $input['kadence_only'] ),
 			),
 			0,
-			$verzameld
+			$verzameld,
+			$pad_ouder
 		);
 
 		$afgekapt     = count( $platgeslagen ) > $max;
@@ -728,21 +752,43 @@ class Kadence_MCP_Abilities_Content {
 		}
 
 		$lengte   = strlen( $markup );
-		$afgekapt = $lengte > $max;
+		$vanaf    = isset( $input['offset'] ) ? max( 0, (int) $input['offset'] ) : 0;
+
+		if ( $vanaf > 0 && $vanaf >= $lengte ) {
+			return new WP_Error(
+				'kadence_mcp_offset_past_end',
+				sprintf(
+					/* translators: 1: offset, 2: length. */
+					__( 'offset %1$d ligt voorbij het einde; de markup is %2$d tekens.', 'mcp-abilities-kadence' ),
+					$vanaf,
+					$lengte
+				)
+			);
+		}
+		$stuk     = (string) substr( $markup, $vanaf, $max );
+		$volgende = $vanaf + strlen( $stuk );
+		// Tot 1.26.0 stond de afkapping alleen in status. Een scan die de
+		// statusregel niet las, miste zo de tweede helft van een footer.
+		$afgekapt = $vanaf > 0 || $volgende < $lengte;
 
 		return array(
-			'post'   => array(
+			'post'        => array(
 				'id'        => $post->ID,
 				'title'     => get_the_title( $post ),
 				'post_type' => $post->post_type,
 			),
-			'markup' => $afgekapt ? substr( $markup, 0, $max ) : $markup,
-			'status' => $afgekapt
+			'markup'      => $stuk,
+			'truncated'   => $afgekapt,
+			'offset'      => $vanaf,
+			'next_offset' => $volgende < $lengte ? $volgende : null,
+			'total_chars' => $lengte,
+			'status'      => $afgekapt
 				? sprintf(
-					/* translators: 1: source, 2: returned chars, 3: total chars. */
-					__( '%1$s, afgekapt op %2$d van %3$d tekens. Verhoog max_chars of vraag één blok op met unique_id.', 'mcp-abilities-kadence' ),
+					/* translators: 1: source, 2: from, 3: to, 4: total chars. */
+					__( '%1$s, DEEL: tekens %2$d tot %3$d van %4$d. Lees verder met offset = next_offset tot die null is, of vraag één blok op met unique_id.', 'mcp-abilities-kadence' ),
 					$bron,
-					$max,
+					$vanaf,
+					$volgende,
 					$lengte
 				)
 				: sprintf(
@@ -930,7 +976,7 @@ class Kadence_MCP_Abilities_Content {
 
 		$genormaliseerd = Kadence_MCP_Inventory::normaliseer_attributen( $bloknaam, $nieuw );
 
-		$gewijzigd = self::vervang_attrs( $boom, $unique_id, $genormaliseerd['attrs'] );
+		$gewijzigd = Kadence_MCP_Inventory::vervang_attrs( $boom, $unique_id, $genormaliseerd['attrs'] );
 		$content   = Kadence_MCP_Inventory::serialiseer( $gewijzigd );
 
 		// wp_update_post verwacht geslashte data; zonder wp_slash verdwijnen
@@ -1261,32 +1307,6 @@ class Kadence_MCP_Abilities_Content {
 	}
 
 	/**
-	 * Vervang de attributen van één blok in een boom.
-	 *
-	 * @param array  $blokken   De boom.
-	 * @param string $unique_id Het doelblok.
-	 * @param array  $attrs     De nieuwe attributen.
-	 *
-	 * @return array
-	 */
-	private static function vervang_attrs( $blokken, $unique_id, $attrs ) {
-		foreach ( $blokken as $i => $blok ) {
-			$huidig = isset( $blok['attrs']['uniqueID'] ) ? (string) $blok['attrs']['uniqueID'] : '';
-
-			if ( $huidig === (string) $unique_id ) {
-				$blokken[ $i ]['attrs'] = $attrs;
-				continue;
-			}
-
-			if ( ! empty( $blok['innerBlocks'] ) ) {
-				$blokken[ $i ]['innerBlocks'] = self::vervang_attrs( $blok['innerBlocks'], $unique_id, $attrs );
-			}
-		}
-
-		return $blokken;
-	}
-
-	/**
 	 * Alleen de openingscomment van een geserialiseerd blok.
 	 *
 	 * Daar staan de attributen in, en dat is precies wat een attribuutwijziging
@@ -1402,6 +1422,13 @@ class Kadence_MCP_Abilities_Content {
 				$regel['level']   = 'blokkeer';
 				$regel['notes'][] = $fout;
 				$blokkeer         = true;
+
+				$blokdef = Kadence_MCP_Inventory::get_block( $bloknaam );
+				$botsing = is_wp_error( $blokdef ) ? '' : Kadence_MCP_Inventory::support_naambotsing( $attr, $blokdef['attributes'] );
+
+				if ( '' !== $botsing ) {
+					$regel['notes'][] = $botsing;
+				}
 			}
 
 			// Een attribuut met een source wordt uit de markup geparsed. Wat je
@@ -1516,6 +1543,25 @@ class Kadence_MCP_Abilities_Content {
 		// kolommen" en werd geblokkeerd op een wijziging die juist klopte.
 		if ( ! empty( $voorstel ) && is_array( $voorstel ) ) {
 			$huidige = array_merge( $huidige, $voorstel );
+		}
+
+		// 0. Een Kadence-paletnaam in een blok dat Kadence niet is. Kadence
+		//    leest "palette5" als verwijzing naar het palet; core niet. Core
+		//    schrijft een style.color-waarde letterlijk als CSS weg
+		//    (color:palette5, ongeldig) en maakt van textColor een klasse
+		//    has-palette5-color die niemand definieert. In beide gevallen erft
+		//    het blok stil de kleur van zijn ouder. Gevonden op 28-09-2026 bij
+		//    Time to Read in een query card.
+		$paletfout = Kadence_MCP_Inventory::paletnamen_buiten_kadence( $bloknaam, $attr, $nieuw );
+
+		if ( ! empty( $paletfout ) ) {
+			$regel['level']   = 'blokkeer';
+			$regel['notes'][] = sprintf(
+				/* translators: 1: block name, 2: offending paths. */
+				__( '%1$s is geen Kadence-blok en kent Kadence\' paletnamen niet (%2$s): de kleur wordt stil genegeerd. Gebruik in style een CSS-waarde als var(--global-palette5) of de preset var:preset|color|theme-palette5, en in textColor/backgroundColor de slug theme-palette5.', 'mcp-abilities-kadence' ),
+				$bloknaam,
+				implode( ', ', $paletfout )
+			);
 		}
 
 		// 1. Een waarde die Kadence niet kent. Attributen zonder enum in
@@ -1708,6 +1754,49 @@ class Kadence_MCP_Abilities_Content {
 
 			if ( ! $leeg ) {
 				$regel['notes'][] = __( 'let op: Kadence schrijft bij maxWidth ook margin-left/right: auto weg. Staat deze Sectie als kolom in een rij, dan is hij een grid-item, en auto-marges krimpen een grid-item naar de breedte van zijn inhoud in plaats van naar de opgegeven maat. Voor een vaste kolombreedte in een rij gebruik je firstColumnWidth en de bijbehorende Tablet/Mobile-varianten op de rij zelf; maxWidth werkt wel zoals verwacht bij een Sectie die niet in een rij staat.', 'mcp-abilities-kadence' );
+
+				// Per breekpunt de richting van de ouder. Kadence schrijft maxWidth
+				// in een Sectie-ouder als flex-basis weg, ook op tablet en mobiel.
+				// Staat de ouder daar verticaal, dan is flex-basis de HOOGTE: een
+				// maxWidth 2000 op mobiel maakte op 25-09-2026 een balk van 2300 hoog.
+				$ouder = Kadence_MCP_Inventory::ouderblok( $boom, isset( $blok['attrs']['uniqueID'] ) ? (string) $blok['attrs']['uniqueID'] : '' );
+
+				if ( is_array( $ouder ) && 'kadence/column' === ( isset( $ouder['blockName'] ) ? $ouder['blockName'] : '' ) ) {
+					$richting = isset( $ouder['attrs']['direction'] ) && is_array( $ouder['attrs']['direction'] ) ? $ouder['attrs']['direction'] : array();
+					$vorige   = 'vertical';
+
+					foreach ( array( 'desktop', 'tablet', 'mobiel' ) as $i => $naam ) {
+						$hier   = isset( $richting[ $i ] ) && '' !== (string) $richting[ $i ] ? (string) $richting[ $i ] : $vorige;
+						$vorige = $hier;
+
+						if ( ! isset( $nieuw[ $i ] ) || '' === (string) $nieuw[ $i ] ) {
+							continue;
+						}
+
+						if ( 'vertical' === $hier ) {
+							$regel['notes'][] = sprintf(
+								/* translators: 1: breakpoint, 2: value. */
+								__( '%1$s: de ouder staat hier verticaal, dus maxWidth %2$s wordt flex-basis — de HOOGTE van deze Sectie — en margin: auto laat hem krimpen tot zijn inhoud en centreren. Moet hij hier de volle breedte hebben, laat maxWidth op dit breekpunt dan leeg.', 'mcp-abilities-kadence' ),
+								$naam,
+								(string) $nieuw[ $i ]
+							);
+						} elseif ( 'vertical-reverse' === $hier ) {
+							$regel['notes'][] = sprintf(
+								/* translators: 1: breakpoint, 2: value. */
+								__( '%1$s: de ouder staat op vertical-reverse. Kadence\' regel voor horizontale Secties kijkt alleen naar kb-section-*-dir-vertical en blijft dan gelden: maxWidth %2$s wordt flex-basis in een kolom die onder elkaar staat, dus de hoogte, plus margin: auto. Reken op een uitzondering in CSS (margin-inline: 0) of kies vertical.', 'mcp-abilities-kadence' ),
+								$naam,
+								(string) $nieuw[ $i ]
+							);
+						} else {
+							$regel['notes'][] = sprintf(
+								/* translators: 1: breakpoint, 2: value. */
+								__( '%1$s: de ouder staat horizontaal, dus maxWidth %2$s wordt flex: 0 1 %2$s — de breedte, zoals bedoeld.', 'mcp-abilities-kadence' ),
+								$naam,
+								(string) $nieuw[ $i ]
+							);
+						}
+					}
+				}
 			}
 		}
 
@@ -2654,7 +2743,7 @@ class Kadence_MCP_Abilities_Content {
 				$standaard[ $id ] = $genormaliseerd['dropped_default'];
 			}
 
-			$boom = self::vervang_attrs( $boom, $id, $genormaliseerd['attrs'] );
+			$boom = Kadence_MCP_Inventory::vervang_attrs( $boom, $id, $genormaliseerd['attrs'] );
 		}
 
 		// Eén serialisatie, één opslag, één revisie.

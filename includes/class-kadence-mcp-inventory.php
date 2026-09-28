@@ -86,9 +86,56 @@ class Kadence_MCP_Inventory {
 			'theme'                  => $basis->get( 'Name' ),
 			'theme_version'          => $basis->get( 'Version' ),
 			'child_theme'            => $parent ? $thema->get( 'Name' ) : '',
+			// Uit de header van style.css op schijf: daarmee is na een release
+			// te zien of de nieuwe versie er staat, los van wat een paginacache
+			// nog serveert.
+			'child_theme_version'    => $parent ? $thema->get( 'Version' ) : '',
 			'kadence_blocks'         => defined( 'KADENCE_BLOCKS_VERSION' ) ? KADENCE_BLOCKS_VERSION : '',
 			'kadence_blocks_pro'     => defined( 'KBP_VERSION' ) ? KBP_VERSION : '',
 			'kadence_pro'            => defined( 'KTP_VERSION' ) ? KTP_VERSION : '',
+			'page_cache'             => self::get_page_cache(),
+		);
+	}
+
+	/**
+	 * Draait er een paginacache?
+	 *
+	 * Een paginacache kan na een release of een wijziging nog de oude HTML en
+	 * de oude, verkleinde CSS serveren (WP Rocket deed dat op staging met een
+	 * style.css van 10 kB tegen 91 kB). Wat hier staat is dus een reden om bij
+	 * een verschil eerst de cache te legen, geen fout.
+	 *
+	 * @return array
+	 */
+	private static function get_page_cache() {
+		$bekend   = array(
+			'WP_ROCKET_VERSION'        => 'WP Rocket',
+			'W3TC_VERSION'             => 'W3 Total Cache',
+			'LSCWP_V'                  => 'LiteSpeed Cache',
+			'WPCACHEHOME'              => 'WP Super Cache',
+			'WPFC_WP_CONTENT_BASENAME' => 'WP Fastest Cache',
+			'BREEZE_VERSION'           => 'Breeze',
+			'NITROPACK_VERSION'        => 'NitroPack',
+		);
+		$gevonden = array();
+
+		foreach ( $bekend as $constante => $naam ) {
+			if ( defined( $constante ) ) {
+				$gevonden[] = $naam;
+			}
+		}
+
+		if ( class_exists( 'SiteGround_Optimizer\\Supercacher\\Supercacher' ) ) {
+			$gevonden[] = 'SiteGround Optimizer';
+		}
+
+		return array(
+			'active'   => ! empty( $gevonden ),
+			'plugins'  => $gevonden,
+			'wp_cache' => defined( 'WP_CACHE' ) && WP_CACHE,
+			'note'     => empty( $gevonden )
+				? ''
+				: __( 'Na een release of overzetting eerst de cache legen voordat je een verschil als fout ziet; een paginacache kan de oude CSS nog serveren.', 'mcp-abilities-kadence' ),
 		);
 	}
 
@@ -440,9 +487,73 @@ class Kadence_MCP_Inventory {
 			'allowed_blocks'   => isset( $type->allowed_blocks ) && is_array( $type->allowed_blocks ) ? $type->allowed_blocks : array(),
 			'keywords'         => isset( $type->keywords ) && is_array( $type->keywords ) ? $type->keywords : array(),
 			'supports'     => is_array( $type->supports ) ? $type->supports : array(),
-			'attributes'   => self::eigen_attributen( $type ),
+			'attributes'   => array_merge( self::eigen_attributen( $type ), self::renderer_attributen( $naam ) ),
 			'registration' => 'php',
 		);
+	}
+
+	/**
+	 * Een block-support-attribuut met een naam die op een eigen attribuut lijkt.
+	 *
+	 * @param string $sleutel    Het attribuut.
+	 * @param array  $attributen Alle attributen van het blok.
+	 *
+	 * @return string Uitleg, of ''.
+	 */
+	public static function support_naambotsing( $sleutel, $attributen ) {
+		$supports = array( 'style', 'align', 'fontSize', 'textColor', 'backgroundColor', 'gradient', 'layout', 'shadow', 'borderColor', 'fontFamily' );
+
+		if ( ! in_array( $sleutel, $supports, true ) ) {
+			return '';
+		}
+
+		$lijkt = array();
+
+		foreach ( array_keys( (array) $attributen ) as $naam ) {
+			$naam = (string) $naam;
+
+			if ( $naam !== $sleutel && strlen( $naam ) > strlen( $sleutel ) && 0 === substr_compare( strtolower( $naam ), strtolower( $sleutel ), -strlen( $sleutel ) ) ) {
+				$lijkt[] = $naam;
+			}
+		}
+
+		if ( empty( $lijkt ) ) {
+			return '';
+		}
+
+		return sprintf(
+			/* translators: 1: support attribute, 2: similar own attributes. */
+			__( '"%1$s" is hier de block-support van WordPress, niet een instelling van dit blok. De eigen instelling met die naam heet %2$s.', 'mcp-abilities-kadence' ),
+			$sleutel,
+			implode( ' of ', $lijkt )
+		);
+	}
+
+	/**
+	 * Attributen die de render van Kadence leest maar die in geen block.json staan.
+	 *
+	 * Zonder deze aanvulling meldt describe-block ze niet, en weigert
+	 * validate-write ze als "bestaat niet", terwijl ze werken. WordPress laat
+	 * een ongedeclareerd attribuut bij het renderen ongemoeid.
+	 *
+	 * @param string $naam De bloknaam.
+	 *
+	 * @return array
+	 */
+	private static function renderer_attributen( $naam ) {
+		$alle_optie = array(
+			'type'          => 'boolean',
+			'default'       => false,
+			'renderer_only' => true,
+			'note'          => 'staat alleen in de block.json van kadence/query-filter-buttons, maar het taxonomiefilter leest hem voor elke weergave (kadence-blocks-pro/includes/query/frontend-filters/class-taxonomy-filter.php): true zet een optie "Alle" bovenaan.',
+		);
+
+		$lijst = array(
+			'kadence/query-filter'          => array( 'allOption' => $alle_optie ),
+			'kadence/query-filter-checkbox' => array( 'allOption' => $alle_optie ),
+		);
+
+		return isset( $lijst[ $naam ] ) ? $lijst[ $naam ] : array();
 	}
 
 	/**
@@ -475,6 +586,11 @@ class Kadence_MCP_Inventory {
 				$samenvatting['ignored_by_render'] = true;
 				$samenvatting['ignored_note']      = $genegeerd;
 			}
+		}
+
+		if ( ! empty( $definitie['renderer_only'] ) ) {
+			$samenvatting['renderer_only'] = true;
+			$samenvatting['note']          = isset( $definitie['note'] ) ? (string) $definitie['note'] : '';
 		}
 
 		if ( isset( $definitie['enum'] ) && is_array( $definitie['enum'] ) ) {
@@ -673,6 +789,14 @@ class Kadence_MCP_Inventory {
 	 * @return array|null Het blok, of null.
 	 */
 	public static function zoek_op_unique_id( $blokken, $unique_id ) {
+		// Blokken zonder uniqueID — het formulierblok van Gravity Forms, core-
+		// blokken als Time to Read — zijn aan te wijzen met hun plek in de boom.
+		// Tot 1.26.0 kon dat niet, en ging zo'n wijziging buiten elke toets om
+		// via WP-CLI of de REST API.
+		if ( self::is_pad( $unique_id ) ) {
+			return self::blok_op_pad( $blokken, self::pad_indexen( $unique_id ) );
+		}
+
 		foreach ( $blokken as $blok ) {
 			$attrs = isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ? $blok['attrs'] : array();
 
@@ -690,6 +814,252 @@ class Kadence_MCP_Inventory {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Kadence-paletnamen ("palette5") in een kleurattribuut van een niet-Kadence-blok.
+	 *
+	 * @param string $bloknaam De bloknaam.
+	 * @param string $attr     Het attribuut.
+	 * @param mixed  $waarde   De waarde.
+	 *
+	 * @return string[] De plekken waar zo'n naam staat, bijvoorbeeld "style.color.text".
+	 */
+	public static function paletnamen_buiten_kadence( $bloknaam, $attr, $waarde ) {
+		if ( '' === (string) $bloknaam || 0 === strpos( (string) $bloknaam, self::BLOCK_PREFIX ) ) {
+			return array();
+		}
+
+		$is_palet = static function ( $v ) {
+			return is_string( $v ) && 1 === preg_match( '/^palette\d+$/', trim( $v ) );
+		};
+
+		if ( in_array( $attr, array( 'textColor', 'backgroundColor', 'borderColor', 'gradient' ), true ) ) {
+			return $is_palet( $waarde ) ? array( $attr . ' = ' . $waarde ) : array();
+		}
+
+		if ( 'style' !== $attr || ! is_array( $waarde ) ) {
+			return array();
+		}
+
+		$fouten = array();
+		$loop   = static function ( $deel, $pad ) use ( &$loop, &$fouten, $is_palet ) {
+			foreach ( $deel as $sleutel => $v ) {
+				$hier = $pad . '.' . $sleutel;
+
+				if ( is_array( $v ) ) {
+					$loop( $v, $hier );
+				} elseif ( $is_palet( $v ) && false !== stripos( $hier, 'color' ) ) {
+					$fouten[] = $hier . ' = ' . $v;
+				}
+			}
+		};
+		$loop( $waarde, 'style' );
+
+		return $fouten;
+	}
+
+	/**
+	 * Alle niet-Kadence-blokken in een boom met een Kadence-paletnaam in een kleurattribuut.
+	 *
+	 * @param array $blokken De boom.
+	 * @param int[] $pad     Intern.
+	 *
+	 * @return array[]
+	 */
+	public static function zoek_paletnamen_buiten_kadence( $blokken, $pad = array() ) {
+		$treffers = array();
+
+		foreach ( $blokken as $i => $blok ) {
+			$hier = array_merge( $pad, array( (int) $i ) );
+			$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+
+			if ( '' !== $naam && isset( $blok['attrs'] ) && is_array( $blok['attrs'] ) ) {
+				foreach ( $blok['attrs'] as $attr => $waarde ) {
+					$fout = self::paletnamen_buiten_kadence( $naam, (string) $attr, $waarde );
+
+					if ( ! empty( $fout ) ) {
+						$treffers[] = array(
+							'block'  => $naam,
+							'path'   => self::PAD_PREFIX . implode( '.', $hier ),
+							'values' => $fout,
+						);
+					}
+				}
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$treffers = array_merge( $treffers, self::zoek_paletnamen_buiten_kadence( $blok['innerBlocks'], $hier ) );
+			}
+		}
+
+		return $treffers;
+	}
+
+	/**
+	 * Voorvoegsel waarmee een blok op zijn plek in de boom wordt aangewezen.
+	 *
+	 * "pad:3.0.1" is het tweede kind van het eerste kind van het vierde blok
+	 * van parse_blocks(), witruimteblokken meegeteld — precies de indexen die
+	 * inspect-post teruggeeft in het veld path.
+	 */
+	const PAD_PREFIX = 'pad:';
+
+	/**
+	 * Is dit een pad in plaats van een uniqueID?
+	 *
+	 * @param string $sleutel De uniqueID of het pad.
+	 *
+	 * @return bool
+	 */
+	public static function is_pad( $sleutel ) {
+		return 1 === preg_match( '/^pad:\d+(\.\d+)*$/', (string) $sleutel );
+	}
+
+	/**
+	 * De indexen uit een pad.
+	 *
+	 * @param string $sleutel Het pad, bijvoorbeeld "pad:3.0.1".
+	 *
+	 * @return int[]
+	 */
+	public static function pad_indexen( $sleutel ) {
+		return array_map( 'intval', explode( '.', substr( (string) $sleutel, strlen( self::PAD_PREFIX ) ) ) );
+	}
+
+	/**
+	 * Het blok op een pad van kindindexen.
+	 *
+	 * @param array $blokken De boom.
+	 * @param int[] $pad     De indexen.
+	 *
+	 * @return array|null
+	 */
+	public static function blok_op_pad( $blokken, $pad ) {
+		$huidig = $blokken;
+		$blok   = null;
+
+		foreach ( $pad as $index ) {
+			if ( ! isset( $huidig[ $index ] ) ) {
+				return null;
+			}
+
+			$blok   = $huidig[ $index ];
+			$huidig = isset( $blok['innerBlocks'] ) ? $blok['innerBlocks'] : array();
+		}
+
+		// Een witruimteblok is geen blok om op te schrijven.
+		return ( is_array( $blok ) && ! empty( $blok['blockName'] ) ) ? $blok : null;
+	}
+
+	/**
+	 * Het pad van het blok met deze uniqueID.
+	 *
+	 * @param array  $blokken   De boom.
+	 * @param string $unique_id De uniqueID.
+	 * @param int[]  $pad       Intern.
+	 *
+	 * @return int[]|null
+	 */
+	public static function pad_van_unique_id( $blokken, $unique_id, $pad = array() ) {
+		foreach ( $blokken as $i => $blok ) {
+			$hier = array_merge( $pad, array( (int) $i ) );
+
+			if ( isset( $blok['attrs']['uniqueID'] ) && (string) $blok['attrs']['uniqueID'] === (string) $unique_id ) {
+				return $hier;
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$treffer = self::pad_van_unique_id( $blok['innerBlocks'], $unique_id, $hier );
+
+				if ( null !== $treffer ) {
+					return $treffer;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Het ouderblok van een blok, op uniqueID of pad.
+	 *
+	 * @param array  $boom    De boom.
+	 * @param string $sleutel De uniqueID of "pad:…".
+	 *
+	 * @return array|null Null als het blok bovenaan staat of niet bestaat.
+	 */
+	public static function ouderblok( $boom, $sleutel ) {
+		if ( '' === (string) $sleutel ) {
+			return null;
+		}
+
+		$pad = self::is_pad( $sleutel ) ? self::pad_indexen( $sleutel ) : self::pad_van_unique_id( $boom, $sleutel );
+
+		if ( ! is_array( $pad ) || count( $pad ) < 2 ) {
+			return null;
+		}
+
+		return self::blok_op_pad( $boom, array_slice( $pad, 0, -1 ) );
+	}
+
+	/**
+	 * Vervang de attributen van één blok, op uniqueID of op pad.
+	 *
+	 * @param array  $blokken De boom.
+	 * @param string $sleutel De uniqueID of "pad:…".
+	 * @param array  $attrs   De nieuwe attributen.
+	 *
+	 * @return array
+	 */
+	public static function vervang_attrs( $blokken, $sleutel, $attrs ) {
+		if ( self::is_pad( $sleutel ) ) {
+			return self::vervang_attrs_op_pad( $blokken, self::pad_indexen( $sleutel ), $attrs );
+		}
+
+		foreach ( $blokken as $i => $blok ) {
+			$huidig = isset( $blok['attrs']['uniqueID'] ) ? (string) $blok['attrs']['uniqueID'] : '';
+
+			if ( $huidig === (string) $sleutel ) {
+				$blokken[ $i ]['attrs'] = $attrs;
+				continue;
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$blokken[ $i ]['innerBlocks'] = self::vervang_attrs( $blok['innerBlocks'], $sleutel, $attrs );
+			}
+		}
+
+		return $blokken;
+	}
+
+	/**
+	 * Vervang de attributen van het blok op een pad.
+	 *
+	 * @param array $blokken De boom.
+	 * @param int[] $pad     De indexen.
+	 * @param array $attrs   De nieuwe attributen.
+	 *
+	 * @return array
+	 */
+	private static function vervang_attrs_op_pad( $blokken, $pad, $attrs ) {
+		$index = (int) array_shift( $pad );
+
+		if ( ! isset( $blokken[ $index ] ) ) {
+			return $blokken;
+		}
+
+		if ( empty( $pad ) ) {
+			$blokken[ $index ]['attrs'] = $attrs;
+
+			return $blokken;
+		}
+
+		$kinderen = isset( $blokken[ $index ]['innerBlocks'] ) ? $blokken[ $index ]['innerBlocks'] : array();
+
+		$blokken[ $index ]['innerBlocks'] = self::vervang_attrs_op_pad( $kinderen, $pad, $attrs );
+
+		return $blokken;
 	}
 
 	/**
@@ -725,14 +1095,17 @@ class Kadence_MCP_Inventory {
 	 * }
 	 * @param int   $diepte    Interne teller.
 	 * @param array $resultaat Interne verzamelaar.
+	 * @param int[] $pad       Het pad tot hier (kindindexen in parse_blocks()).
 	 *
 	 * @return array
 	 */
-	public static function plat_blokken( $blokken, $opties, $diepte = 0, &$resultaat = array() ) {
-		foreach ( $blokken as $blok ) {
+	public static function plat_blokken( $blokken, $opties, $diepte = 0, &$resultaat = array(), $pad = array() ) {
+		foreach ( $blokken as $i => $blok ) {
 			if ( count( $resultaat ) >= $opties['max'] ) {
 				return $resultaat;
 			}
+
+			$hier = array_merge( $pad, array( (int) $i ) );
 
 			$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
 
@@ -752,6 +1125,12 @@ class Kadence_MCP_Inventory {
 					'depth'    => $diepte,
 					'children' => isset( $blok['innerBlocks'] ) ? count( $blok['innerBlocks'] ) : 0,
 				);
+
+				// Zonder uniqueID is het pad de enige manier om dit blok aan
+				// te wijzen in validate-write, set-attributes en style-blocks.
+				if ( ! isset( $attrs['uniqueID'] ) || '' === (string) $attrs['uniqueID'] ) {
+					$regel['path'] = self::PAD_PREFIX . implode( '.', $hier );
+				}
 
 				// De zichtbare tekst van een blok staat in de markup, niet in
 				// de attributen. kadence/listitem, kadence/advancedheading en
@@ -792,7 +1171,7 @@ class Kadence_MCP_Inventory {
 			}
 
 			if ( ! empty( $blok['innerBlocks'] ) ) {
-				self::plat_blokken( $blok['innerBlocks'], $opties, $diepte + 1, $resultaat );
+				self::plat_blokken( $blok['innerBlocks'], $opties, $diepte + 1, $resultaat, $hier );
 			}
 		}
 
@@ -1494,10 +1873,20 @@ class Kadence_MCP_Inventory {
 			// breakpoint), geen strings. Ze gaan ongewijzigd mee.
 			if ( ! empty( $waarde ) ) {
 				$stijlen['typography'][ $sleutel ] = $waarde;
+
+				// option() vult een ontbrekende theme mod aan met Kadence'
+				// standaardwaarde. Zonder dit onderscheid ziet een site waar
+				// niets is ingesteld er precies zo uit als een site waar alles
+				// is ingesteld — en leken lokaal en staging gelijk terwijl de
+				// een GeneralSans op 500 had en de ander de systeemletter op 700.
+				$stijlen['typography_sources'][ $sleutel ] = null === get_theme_mod( $sleutel, null ) ? 'standaard' : 'opgeslagen';
 			}
 		}
 
 		if ( '' === $stijlen['typography_status'] ) {
+			$bronnen    = isset( $stijlen['typography_sources'] ) ? $stijlen['typography_sources'] : array();
+			$opgeslagen = count( array_keys( $bronnen, 'opgeslagen', true ) );
+
 			$stijlen['typography_status'] = empty( $stijlen['typography'] )
 				? sprintf(
 					/* translators: %s: comma-separated option keys. */
@@ -1505,14 +1894,231 @@ class Kadence_MCP_Inventory {
 					implode( ', ', $sleutels )
 				)
 				: sprintf(
-					/* translators: 1: number found, 2: number requested. */
-					__( '%1$d van %2$d themasleutels had een waarde.', 'mcp-abilities-kadence' ),
-					count( $stijlen['typography'] ),
-					count( $sleutels )
+					/* translators: 1: stored, 2: requested, 3: defaults. */
+					__( '%1$d van %2$d themasleutels zijn opgeslagen; %3$d tonen Kadence\' standaardwaarde (niet ingesteld — zie typography_sources).', 'mcp-abilities-kadence' ),
+					$opgeslagen,
+					count( $sleutels ),
+					count( $bronnen ) - $opgeslagen
 				);
 		}
 
+		$stijlen['fonts'] = self::get_fonts( $stijlen['typography'] );
+
 		return $stijlen;
+	}
+
+	/**
+	 * Welke lettertypes de site zelf aanlevert, en of de typografie ze vindt.
+	 *
+	 * Een family in de typografie die nergens een @font-face heeft, valt in de
+	 * browser stil terug op de fallback; een gewicht zonder eigen bestand wordt
+	 * nagebootst (vet gemaakt of dunner getekend). Geen van beide geeft een
+	 * fout. Gelezen: de kt_font-posts van Kadence Custom Fonts, de families die
+	 * het thema via kadence_theme_custom_fonts krijgt, en Google-fonts zoals de
+	 * typografie ze aanmerkt.
+	 *
+	 * @param array $typografie De typografie zoals get_global_styles hem leest.
+	 *
+	 * @return array
+	 */
+	private static function get_fonts( $typografie ) {
+		$faces = array();
+
+		if ( post_type_exists( 'kt_font' ) ) {
+			$posts = get_posts(
+				array(
+					'post_type'      => 'kt_font',
+					'post_status'    => 'publish',
+					'posts_per_page' => 200,
+					'orderby'        => 'title',
+					'order'          => 'ASC',
+				)
+			);
+
+			foreach ( $posts as $post ) {
+				$type = (string) get_post_meta( $post->ID, '_kad_font_type', true );
+				$naam = (string) get_post_meta( $post->ID, '_kad_font_name', true );
+
+				if ( 'adobe' === $type || '' === $naam ) {
+					continue;
+				}
+
+				$bestanden = array();
+
+				foreach ( array( 'woff2', 'woff', 'ttf', 'eot', 'svg' ) as $formaat ) {
+					$url = (string) get_post_meta( $post->ID, '_kad_font_' . $formaat, true );
+
+					if ( '' !== $url ) {
+						$bestanden[ $formaat ] = $url;
+					}
+				}
+
+				$faces[] = array(
+					'post_id'  => $post->ID,
+					'family'   => $naam,
+					'weight'   => (string) get_post_meta( $post->ID, '_kad_font_weight', true ),
+					'style'    => (string) get_post_meta( $post->ID, '_kad_font_style', true ),
+					'swap'     => 'true' === (string) get_post_meta( $post->ID, '_kad_font_swap', true ),
+					'fallback' => (string) get_post_meta( $post->ID, '_kad_font_fallback', true ),
+					'files'    => $bestanden,
+				);
+			}
+		}
+
+		// Wat het thema in zijn keuzelijst ziet. Een plugin kan hier ook
+		// families aanmelden zonder kt_font-post; die tellen als bekend, maar
+		// hun gewichten zijn dan niet te controleren.
+		$thema_lijst = apply_filters( 'kadence_theme_custom_fonts', array() );
+		$aangemeld   = array();
+
+		if ( is_array( $thema_lijst ) ) {
+			foreach ( $thema_lijst as $sleutel => $font ) {
+				$aangemeld[] = is_array( $font ) && isset( $font['name'] ) ? (string) $font['name'] : (string) $sleutel;
+			}
+		}
+
+		$waarschuwingen = array();
+
+		foreach ( self::typografie_gebruik( $typografie ) as $gebruik ) {
+			$family = $gebruik['family'];
+
+			if ( '' === $family || $gebruik['google'] || self::is_systeemletter( $family ) ) {
+				continue;
+			}
+
+			$eigen = wp_list_filter( $faces, array( 'family' => $family ) );
+
+			if ( empty( $eigen ) ) {
+				if ( ! in_array( $family, $aangemeld, true ) ) {
+					$waarschuwingen[] = sprintf(
+						/* translators: 1: family, 2: option keys. */
+						__( '"%1$s" (in %2$s) heeft op deze site geen @font-face: de browser valt stil terug op de fallback.', 'mcp-abilities-kadence' ),
+						$family,
+						implode( ', ', array_unique( $gebruik['keys'] ) )
+					);
+				}
+
+				continue;
+			}
+
+			foreach ( $gebruik['weights'] as $gewicht => $sleutels_gewicht ) {
+				if ( empty( wp_list_filter( $eigen, array( 'weight' => (string) $gewicht ) ) ) ) {
+					$waarschuwingen[] = sprintf(
+						/* translators: 1: family, 2: weight, 3: option keys, 4: available weights. */
+						__( '"%1$s" heeft geen bestand voor gewicht %2$s (gebruikt in %3$s); de browser bootst het na. Beschikbaar: %4$s.', 'mcp-abilities-kadence' ),
+						$family,
+						$gewicht,
+						implode( ', ', $sleutels_gewicht ),
+						implode( ', ', array_unique( wp_list_pluck( $eigen, 'weight' ) ) )
+					);
+				}
+			}
+		}
+
+		return array(
+			'faces'      => $faces,
+			'registered' => array_values( array_unique( $aangemeld ) ),
+			'warnings'   => $waarschuwingen,
+			'status'     => empty( $faces ) && empty( $aangemeld )
+				? __( 'geen eigen lettertypes aangemeld (Kadence Custom Fonts niet actief of leeg); alleen systeem- en Google-fonts.', 'mcp-abilities-kadence' )
+				: sprintf(
+					/* translators: 1: number of faces, 2: number of warnings. */
+					__( '%1$d font-faces gevonden, %2$d waarschuwingen.', 'mcp-abilities-kadence' ),
+					count( $faces ),
+					count( $waarschuwingen )
+				),
+		);
+	}
+
+	/**
+	 * Per family: welke gewichten de typografie vraagt, en vanuit welke sleutel.
+	 *
+	 * Koppen met family "inherit" nemen heading_font, en heading_font met
+	 * "inherit" neemt base_font — zoals het thema het in zijn CSS-variabelen doet.
+	 *
+	 * @param array $typografie De typografie.
+	 *
+	 * @return array[]
+	 */
+	private static function typografie_gebruik( $typografie ) {
+		$familie = static function ( $waarde ) {
+			$family = is_array( $waarde ) && isset( $waarde['family'] ) ? trim( (string) $waarde['family'] ) : '';
+			// Een familiestring kan al een fallback bevatten; de eerste naam telt.
+			$eerste = '' === $family ? '' : trim( (string) strtok( $family, ',' ), " \"'" );
+
+			return 'inherit' === $eerste ? '' : $eerste;
+		};
+
+		$basis   = isset( $typografie['base_font'] ) ? $typografie['base_font'] : array();
+		$kop     = isset( $typografie['heading_font'] ) ? $typografie['heading_font'] : array();
+		$basis_f = $familie( $basis );
+		$kop_f   = $familie( $kop );
+		$kop_g   = '' === $kop_f ? ! empty( $basis['google'] ) : ! empty( $kop['google'] );
+		$kop_f   = '' === $kop_f ? $basis_f : $kop_f;
+
+		$gebruik  = array();
+		$voeg_toe = static function ( $family, $google, $gewicht, $sleutel ) use ( &$gebruik ) {
+			if ( '' === $family ) {
+				return;
+			}
+
+			if ( ! isset( $gebruik[ $family ] ) ) {
+				$gebruik[ $family ] = array(
+					'family'  => $family,
+					'google'  => false,
+					'keys'    => array(),
+					'weights' => array(),
+				);
+			}
+
+			$gebruik[ $family ]['google'] = $gebruik[ $family ]['google'] || $google;
+			$gebruik[ $family ]['keys'][] = $sleutel;
+
+			$gewicht = (string) $gewicht;
+			// Kadence schrijft "regular" voor 400.
+			if ( '' === $gewicht || 'regular' === $gewicht || 'normal' === $gewicht ) {
+				$gewicht = '400';
+			}
+
+			if ( ctype_digit( $gewicht ) ) {
+				$gebruik[ $family ]['weights'][ $gewicht ][] = $sleutel;
+			}
+		};
+
+		foreach ( $typografie as $sleutel => $waarde ) {
+			// heading_font geeft alleen de family; het gewicht staat per kop.
+			if ( ! is_array( $waarde ) || 'heading_font' === $sleutel ) {
+				continue;
+			}
+
+			if ( 'base_font' === $sleutel ) {
+				$family = $basis_f;
+				$google = ! empty( $basis['google'] );
+			} else {
+				$eigen  = $familie( $waarde );
+				$family = '' !== $eigen ? $eigen : $kop_f;
+				$google = '' !== $eigen ? ! empty( $waarde['google'] ) : $kop_g;
+			}
+
+			$voeg_toe( $family, $google, isset( $waarde['weight'] ) ? $waarde['weight'] : '', $sleutel );
+		}
+
+		return array_values( $gebruik );
+	}
+
+	/**
+	 * Is dit een systeemletter of een generieke familie?
+	 *
+	 * @param string $family De eerste naam uit de familiestring.
+	 *
+	 * @return bool
+	 */
+	private static function is_systeemletter( $family ) {
+		return in_array(
+			strtolower( $family ),
+			array( '-apple-system', 'blinkmacsystemfont', 'system-ui', 'ui-sans-serif', 'sans-serif', 'serif', 'monospace', 'segoe ui', 'roboto', 'helvetica', 'helvetica neue', 'arial', 'georgia', 'times new roman' ),
+			true
+		);
 	}
 
 	/**
@@ -2028,7 +2634,7 @@ class Kadence_MCP_Inventory {
 		if ( $versie_mee !== $versie_verwacht ) {
 			return sprintf(
 				/* translators: %s: the post's last modified date. */
-				__( 'De post is gewijzigd sinds je dit token kreeg (laatste wijziging: %s). Kijk opnieuw naar het blok en laat een vers token maken — een goedkeuring op een versie die niet meer bestaat is geen goedkeuring.', 'mcp-abilities-kadence' ),
+				__( 'De post is gewijzigd sinds je dit token kreeg (laatste wijziging: %s). Kijk opnieuw naar het blok en laat een vers token maken — een goedkeuring op een versie die niet meer bestaat is geen goedkeuring. Meestal is de oorzaak een andere schrijfactie op dezelfde post in de tussentijd, ook een van jezelf: elke opslag verandert de wijzigingsdatum en laat alle tokens op die post vervallen. Toets en schrijf per post dus na elkaar, niet parallel, of bundel de blokken in één style-blocks (één token, één opslag).', 'mcp-abilities-kadence' ),
 				(string) $post->post_modified_gmt
 			);
 		}

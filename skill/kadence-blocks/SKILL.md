@@ -1,6 +1,6 @@
 ---
 name: kadence-blocks
-description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kadence-site via de Kadence MCP-server (kadence/list-blocks, describe-block, inspect-post, diff-blocks, list-entities, find-post, get-global-styles, validate-write, preview-write, set-attributes, set-text, move-blocks, update-post, duplicate-blocks, prepare-import). Laad dit vóór je een vraag beantwoordt over hoe een Kadence-pagina is opgebouwd, waarom twee blokken er anders uitzien, wat er moet veranderen voor mobiel, of voordat je iets schrijft."
+description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kadence-site via de Kadence MCP-server (kadence/list-blocks, describe-block, inspect-post, diff-blocks, list-entities, find-post, get-global-styles, validate-write, preview-write, set-attributes, set-text, move-blocks, update-post, duplicate-blocks, prepare-import, check-access, audit-colors, replace-colors, site-fingerprint, export-entity, import-entity, update-entity-content, trash-post). Laad dit vóór je een vraag beantwoordt over hoe een Kadence-pagina is opgebouwd, waarom twee blokken er anders uitzien, wat er moet veranderen voor mobiel, of voordat je iets schrijft."
 ---
 
 # Kadence uitlezen via MCP
@@ -8,7 +8,7 @@ description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kaden
 Deze skill beschrijft hoe je de Kadence MCP-server gebruikt zonder de fouten te
 maken die de toolschema's niet kunnen voorkomen.
 
-De server telt veertig abilities: negentien lezen, eenentwintig schrijven.
+De server telt achtenveertig abilities: drieëntwintig lezen, vijfentwintig schrijven.
 **Schrijven is dus geen uitzondering** — controleer per tool of hij schrijft, in
 plaats van ervan uit te gaan dat lezen de norm is.
 
@@ -1111,10 +1111,180 @@ het **attribuut** de weergave, en een achtergebleven klasse verandert daar
 niets aan. `set-attributes` en `style-blocks` kunnen `direction` dus gewoon
 wijzigen op een bestaand blok.
 
+## Blokken zonder uniqueID: het pad
+
+Core-blokken (`core/post-time-to-read`, `core/paragraph`) en het formulierblok
+van Gravity Forms hebben geen uniqueID. `inspect-post` geeft ze een veld
+`path`, bijvoorbeeld `"pad:0.1.0.2"`: de kindindexen in `parse_blocks()`,
+witruimteblokken op het hoogste niveau meegeteld. Dat pad neem je in
+`validate-write`, `set-attributes`, `style-blocks`, `get-raw-markup` en
+`inspect-post` (`from_unique_id`) gewoon in plaats van een uniqueID.
+
+Een pad verschuift zodra er ervóór een blok bijkomt of weggaat. Het token vangt
+dat af, want het hangt aan de wijzigingsdatum van de post; lees na een
+structuurwijziging het pad dus opnieuw uit.
+
+## Een paletnaam werkt alleen in Kadence-blokken
+
+`"palette5"` is een Kadence-verwijzing. Core kent hem niet: in
+`style.color.text` wordt het letterlijk `color: palette5` (ongeldig), in
+`textColor` de klasse `has-palette5-color` die niemand definieert. In beide
+gevallen erft het blok stil de kleur van zijn ouder. `validate-write` blokkeert
+dat nu en `verify-markup` meldt bestaande gevallen in `palette_names`.
+
+In een core-blok gebruik je in `style` een CSS-waarde (`var(--global-palette5)`
+of een eigen token) of de preset `var:preset|color|theme-palette5`, en in
+`textColor`/`backgroundColor` de slug `theme-palette5`. Gravity Forms neemt in
+zijn formulierblok alleen hex aan.
+
+## Typografie en fonts: wat is echt ingesteld
+
+Het thema vult een typografiesleutel die niet in de theme mods staat aan met
+zijn standaardwaarde. Een waarde in `get-global-styles` bewijst dus niet dat hij
+is ingesteld: kijk naar `typography_sources` (`opgeslagen` of `standaard`).
+Lokaal en staging leken zo gelijk terwijl de een GeneralSans op 500 had en de
+ander de systeemletter op 700.
+
+`styles.fonts` somt de font-faces op die de site zelf levert (Kadence Custom
+Fonts) en waarschuwt als een family uit de typografie geen `@font-face` heeft
+(de browser valt stil terug op de fallback) of als een gewicht geen eigen bestand
+heeft (de browser bootst het na). `environment` noemt de versie van het child
+theme en of er een paginacache draait: leeg die na een release eerst, voordat je
+een verschil als fout ziet.
+
+## Overzetten naar een andere site
+
+1. **`check-access` eerst.** Zonder `edit_theme_options` zijn headers,
+   elementen, navigaties en vectoren niet te bewerken en concepten niet te
+   lezen; zonder `unfiltered_html` haalt WordPress SVG weg en wordt `&` in een
+   titel `&amp;`. `list-entities` meldt posts die er zijn maar niet leesbaar
+   (`unreadable`) — maak die niet opnieuw aan.
+2. **Kadence-objecten met `export-entity` → `import-entity`**, niet met de
+   export/import van Kadence zelf: die haalt backslashes uit de inhoud (`\u002d`
+   wordt `u002d`) en breekt zo `var(--…)` en klassen, zonder foutmelding.
+   `export-entity` draagt inhoud én `_kad`-meta (schaduwen, kleuren, plaatsing)
+   en noemt de posts en media waarnaar verwezen wordt; geef hun ID op de
+   doelsite mee als `post_map` en `media_map`, en het domein als `replace`.
+   ID's ín de meta worden niet omgezet: die staan in `meta_ids_to_check`.
+3. **Het tegenstuk vinden:** de uniqueID's blijven bij een overzetting gelijk,
+   de post-ID's niet. `find-post` met `unique_id` vindt de post op de andere site
+   zonder ID-kaart.
+4. **Posts:** `create-post` met `date` (anders de datum van nu) en
+   `terms: {"category": []}` (anders zet WordPress een bericht in
+   *Uncategorized*); het voorstel meldt in `plan.wordpress_adds` wat WordPress er
+   zelf bij zou zetten.
+5. **Vergelijken:** `site-fingerprint` op beide sites en de hashes naast elkaar;
+   verschilt er een, vraag dat deel op met `detail: true`. Termen met hun
+   beschrijving, de typografie, fonts, Kadence-objecten (op titel, zonder ID's en
+   domein) en pluginversies zitten erin — precies wat een pixelvergelijking pas
+   laat ziet.
+6. **Opruimen:** dubbel aangemaakte objecten met `trash-post`. Die zoekt eerst
+   waar het object nog gebruikt wordt (op id, en bij een custom SVG op
+   `kb-custom-{ID}`) en geeft dan geen token; een verwijzing naar een post in de
+   prullenbak laat het blok stil verdwijnen.
+
+## Kleuren over de hele site
+
+`audit-colors` groepeert per kleurwaarde waar hij staat: blokattributen, de
+`_kad`-meta van navigaties, headers en queries, en de typografie. Een hex die
+gelijk is aan een paletkleur krijgt `same_as`: hij ziet er goed uit maar beweegt
+niet mee als het palet verandert. Kleuren in CSS-bestanden zie je hier niet.
+
+`replace-colors` zet ze om met een kaart `{"#04201a": "palette3"}`. Het slaat
+bewust over, met reden in `skipped`:
+- een `var(--…)` waar een opacity bij hoort — een schaduw `{color, opacity}`,
+  een schaduw als lijst `[aan, kleur, opacity, …]`, of een broer `…Opacity`:
+  Kadence rekent de kleur dan om naar rgba, en dat breekt een variabele;
+- een paletnaam in een niet-Kadence-blok;
+- een niet-hex waarde in een Gravity Forms-blok.
+
+## Vectoren en custom SVG's
+
+`create-entity` voor een vector rekent vooraf uit wat er na de sanitizer van
+Kadence en (zonder `unfiltered_html`) kses van WordPress van de SVG overblijft,
+en weigert als er elementen wegvallen (`accept_loss` om toch door te gaan). Na
+het aanmaken wordt op elementen teruggelezen.
+
+Een bestaande vector of custom SVG wijzig je met `update-entity-content`: een
+lijst `{from, to, count}`, waarbij `count` het aantal keer is dat `from` er nu
+staat — klopt dat niet, dan gebeurt er niets. Bij een custom SVG moet de JSON
+geldig blijven.
+
+## Vormen die in geen schema staan
+
+Afgelezen van werkende blokken; `describe-block` kent ze niet.
+
+- **Voorwaardelijk tonen op een veld:** `kadenceConditional.postData` met
+  `conditions: [{field: "post|post_custom_field", para: "kb_custom_input",
+  custom: "<veld>", compare: "not_empty"}]`. Voor een ACF-repeater staat in de
+  meta het aantal rijen, dus leeg is weg. Op een term:
+  `field: "post|has_taxonomy"`, `para: "<taxonomie>|<term>"`,
+  `compare: "is_true"`. Op posttype: `post|post_type` equals `service`.
+- **Repeater over ACF:** `source` `current|acf_repeater|<veld>` op
+  `kadence/repeater`; in de template een inline dynamische span met
+  `data-field="repeater|repeater_custom_field"`, `data-custom="<subveld>"`,
+  `data-source` gelijk aan de bron en `data-userepeatercontext="true"`. Een
+  `[kb-dynamic]`-shortcode werkt daar niet: die draait pas na de rijen, zonder
+  rijcontext. Een dynamische link in zo'n rij: `kadenceDynamic.link` met
+  `useRepeaterContext: true`, plus dezelfde shortcode in `link` met
+  `userepeatercontext='true'`.
+- **Inline dynamische tekst in elk blok** (ook de knoptekst van `singlebtn`):
+  `<span data-field="post|post_custom_field" data-para="kb_custom_input"
+  data-custom="<veld>" class="kb-inline-dynamic">standaard</span>`; de tekst in
+  de span is de standaard als het veld leeg is.
+- **Dynamic HTML met een eigen veld:** `metaField: "kb_custom_input"` én
+  `customMeta`; alleen `customMeta` geeft niets.
+- **Dynamische achtergrond:** op een rij `kadenceDynamic.bgImg`, op een Sectie
+  `backgroundImg:0:bgImg`. In een lus (query card, element als kaart) hoort er
+  `inQueryBlock: true` bij, anders delen alle kaarten één foto — en de editor
+  haalt die vlag weg bij los opslaan. `check-bindings` waarschuwt hiervoor.
+- **Filters:** `allOption` werkt op de dropdown en de checkboxen ook, al staat
+  hij alleen in de `block.json` van de filterknoppen.
+
+## Recept: mega menu
+
+Een `kadence/navigation-link` met `isMegaMenu: true` en een breedte
+(`megaMenuWidth: "custom"`, `megaMenuCustomWidth: 802`), met als kind één
+`kadence/rowlayout` (bijvoorbeeld `columns: 3`, `columnGutter: "none"`,
+`padding: [0,0,0,0]`) en daarin Secties met een kop en een eigen
+`kadence/navigation` (`id` van een losse navigatie). Twee valkuilen:
+- blokken in een dicht mega menu worden in de editor niet gemount en krijgen
+  geen uniqueID. `verify-markup` meldt ze in `missing_unique_id`, met een
+  voorstel in Kadence-vorm; zet dat met `set-attributes` op het pad;
+- `paddingDropdown` van de navigatie geldt ook voor het paneel, en telt op bij de
+  padding van de rij. De schaduw van het paneel is
+  `_kad_navigation_dropdownShadow` op de navigatie (post meta).
+
+## Tokens: per post na elkaar
+
+Elk token hangt aan de wijzigingsdatum van de post. Elke opslag, ook een van
+jezelf, laat alle andere tokens op die post vervallen. Toets en schrijf per post
+dus na elkaar, niet parallel, of bundel de blokken in één `style-blocks` (één
+token, één opslag). Meerdere Kadence-objecten met dezelfde meta-wijziging doe je
+in één keer met `set-entity-meta` en `items`.
+
+## Nog meer, kort
+
+- `create-query` kan nu ook vanaf een preset van Kadence (`preset: "no-filters"`
+  of `"simple"`, met `card_id`), met dezelfde templates als het keuzescherm.
+- `kadence/search` is bewust niet te genereren (vergrendelde template met de
+  verzendknop); kopieer er een met `duplicate-blocks` of `prepare-import`.
+- `replace-block` schrijft nu de link van een Sectie mee (`kb-section-has-link`
+  en de `<a class="kb-section-link-overlay">`, ook met een dynamische link).
+- `validate-write` zegt bij `maxWidth` op een Sectie per breekpunt wat het wordt:
+  in een verticale ouder de hoogte, en ook bij `vertical-reverse`.
+- `describe-block` markeert block-support-attributen met een naam die op een
+  eigen instelling lijkt (`style` tegenover `listStyle`), en kent de waarden van
+  `widthType` (knop) en `slideFrom` (off-canvas).
+- `find-usages` telt `id` op `kadence/tab`, `kadence/slide` en `kadence/pane`
+  niet meer mee: daar is het een volgnummer, geen verwijzing.
+- `get-raw-markup` leest lange posts in stukken: `truncated`, `offset` en
+  `next_offset`.
+
 ## Grenzen
 
-- Eenentwintig abilities schrijven, alle met token of `expect_modified`. De
-  overige negentien zijn alleen-lezen. Ga niet af op de naam: `generate-section`,
+- Vijfentwintig abilities schrijven, alle met token of `expect_modified`. De
+  overige drieëntwintig zijn alleen-lezen. Ga niet af op de naam: `generate-section`,
   `prepare-import` en `preview-write` klinken als schrijvers maar slaan niets
   op, terwijl
   `sync-query-facets` en `set-card-layout` dat wél doen.

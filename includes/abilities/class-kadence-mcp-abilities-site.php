@@ -76,6 +76,10 @@ class Kadence_MCP_Abilities_Site {
 								'type'        => 'string',
 								'description' => __( 'Exacte slug. Gaat voor op search.', 'mcp-abilities-kadence' ),
 							),
+							'unique_id' => array(
+								'type'        => 'string',
+								'description' => __( 'Zoek de post(s) waarin een blok met deze uniqueID staat. Gaat voor op slug en search. Dé manier om na een overzetting het tegenstuk op de andere site te vinden: de uniqueID blijft gelijk, het post-ID niet.', 'mcp-abilities-kadence' ),
+							),
 							'post_type' => array(
 								'type'        => 'array',
 								'items'       => array( 'type' => 'string' ),
@@ -214,7 +218,7 @@ class Kadence_MCP_Abilities_Site {
 				'args' => array(
 					'label'       => __( 'Globale stijlen opvragen', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'Het kleurenpalet en de basistypografie van het Kadence-thema.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Geeft het globale kleurenpalet, de basistypografie en de site-brede standaardinstellingen per blok. Die laatste zijn INVOEGstandaarden: wat de editor invult bij een nieuw blok, en wat bij opslaan in de markup terechtkomt. Ze veranderen niets aan bestaande blokken — een ontbrekend attribuut daar betekent nog steeds de standaardwaarde uit describe-block. Waar ze voor dienen is weten welke vorm iets op deze site hoort te krijgen als je iets nieuws voorstelt. Ontbreekt een bron, dan staat dat er zo bij — er worden geen waarden verzonnen. Ook bruikbaar om te weten welke kleur een blok bedoelt als het naar "palette3" verwijst.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Geeft het globale kleurenpalet, de basistypografie en de site-brede standaardinstellingen per blok. Die laatste zijn INVOEGstandaarden: wat de editor invult bij een nieuw blok, en wat bij opslaan in de markup terechtkomt. Ze veranderen niets aan bestaande blokken — een ontbrekend attribuut daar betekent nog steeds de standaardwaarde uit describe-block. Waar ze voor dienen is weten welke vorm iets op deze site hoort te krijgen als je iets nieuws voorstelt. Ontbreekt een bron, dan staat dat er zo bij — er worden geen waarden verzonnen. Ook bruikbaar om te weten welke kleur een blok bedoelt als het naar "palette3" verwijst. LET OP bij de typografie: het thema vult een niet-ingestelde sleutel aan met zijn standaardwaarde, dus een waarde zegt niet dat hij is ingesteld — typography_sources zegt per sleutel opgeslagen of standaard. fonts somt de font-faces op die de site zelf levert (Kadence Custom Fonts) en waarschuwt als een family of gewicht uit de typografie er geen heeft; de browser valt dan stil terug of bootst het gewicht na. environment noemt ook de versie van het child theme en of er een paginacache draait (leeg die eerst voordat je een verschil na een release als fout ziet).', 'mcp-abilities-kadence' ),
 					'output_schema' => array(
 						'type'       => 'object',
 						'properties' => array(
@@ -223,6 +227,102 @@ class Kadence_MCP_Abilities_Site {
 						),
 					),
 					'execute_callback' => array( __CLASS__, 'get_global_styles' ),
+				),
+			),
+			array(
+				'name' => 'kadence/check-access',
+				'args' => array(
+					'label'       => __( 'Rechten van dit account controleren', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'Wat dit account per posttype mag lezen en bewerken, en welke rechten ontbreken.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Controle vooraf, vóór je iets aanmaakt of overzet. Een ontbrekend recht ziet er in de andere tools uit als "bestaat niet" of als een stille aanpassing: zonder edit_theme_options zijn headers, elementen, navigaties en vectoren niet te bewerken (en concepten niet te lezen), en zonder unfiltered_html haalt WordPress bij het opslaan SVG en scripts weg en wordt & in een titel &amp;. Geeft per posttype het aantal posts, hoeveel daarvan leesbaar en bewerkbaar zijn, en of aanmaken en publiceren mag. Posts die er zijn maar niet leesbaar zijn, niet opnieuw aanmaken.', 'mcp-abilities-kadence' ),
+					'input_schema' => array(
+						'type'       => 'object',
+						'default'    => (object) array(),
+						'properties' => array(
+							'post_types' => array(
+								'type'        => 'array',
+								'items'       => array( 'type' => 'string' ),
+								'description' => __( 'Beperk tot deze posttypes. Leeg is alle Kadence- en publieke posttypes.', 'mcp-abilities-kadence' ),
+							),
+						),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'check_access' ),
+				),
+			),
+			array(
+				'name' => 'kadence/audit-colors',
+				'args' => array(
+					'label'       => __( 'Kleurgebruik op de site nalopen', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'Per kleurwaarde waar hij staat: blokattributen, Kadence-meta en typografie.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Loopt de blokattributen van alle posts, de _kad-meta van de Kadence-objecten en de typografie van het thema af, en groepeert per kleurwaarde waar die staat (post:ID uniqueID attribuut, of meta:ID sleutel). Per waarde de soort: palet (palette3), palet-variabele (var(--global-palette3)), variabele (var(--eigen-token)), hex of rgb. Een hex die gelijk is aan een paletkleur krijgt same_as: die ziet er goed uit maar beweegt niet mee als het palet verandert. Met only_off_palette alleen hex, rgb en de rest; met value alleen die ene waarde. Kleuren in CSS-bestanden van het thema zie je hier niet. Schrijft niets; omzetten doe je daarna met style-blocks of set-entity-meta.', 'mcp-abilities-kadence' ),
+					'input_schema' => array(
+						'type'       => 'object',
+						'default'    => (object) array(),
+						'properties' => array(
+							'only_off_palette' => array(
+								'type'        => 'boolean',
+								'default'     => false,
+								'description' => __( 'Alleen waarden die geen paletverwijzing of variabele zijn.', 'mcp-abilities-kadence' ),
+							),
+							'value' => array(
+								'type'        => 'string',
+								'description' => __( 'Alleen deze waarde, bijvoorbeeld "#04201a" of "palette4" (hoofdletterongevoelig).', 'mcp-abilities-kadence' ),
+							),
+							'scan_limit' => array(
+								'type'    => 'integer',
+								'minimum' => 1,
+								'maximum' => 2000,
+								'default' => 500,
+							),
+						),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'audit_colors' ),
+				),
+			),
+			array(
+				'name' => 'kadence/replace-colors',
+				'args' => array(
+					'label'       => __( 'Kleuren omzetten over de hele site', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Zet kleurwaarden om in blokattributen en Kadence-meta, met een kaart {oud: nieuw}.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Zet kleuren om in de blokattributen van alle posts (of van post_ids) en in de _kad-meta van de Kadence-objecten, met een kaart {"#04201a":"palette3", "#dcdcdc":"#e6e6e6"}; oud is hoofdletterongevoelig. Draai eerst audit-colors om te zien wat er staat. Het voorstel geeft per post en per meta-sleutel elke wijziging, en in skipped wat bewust niet wordt omgezet, met reden: een var(--…) waar een opacity bij hoort (Kadence rekent die om naar rgba en dat breekt een variabele), een paletnaam in een niet-Kadence-blok (core kent palette3 niet), en een niet-hex waarde in een Gravity Forms-blok. Posts krijgen één revisie per post; meta kent geen revisies, de oude waarde staat in changes[].from. Kleuren in CSS-bestanden raakt dit niet. Twee stappen: eerst zonder token, daarna met token en dezelfde invoer.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => true,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'map'          => array( 'type' => 'object', 'additionalProperties' => array( 'type' => 'string' ) ),
+							'post_ids'     => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => __( 'Beperk tot deze posts (inhoud én meta). Leeg is de hele site.', 'mcp-abilities-kadence' ) ),
+							'include_meta' => array( 'type' => 'boolean', 'default' => true ),
+							'token'        => array( 'type' => 'string' ),
+						),
+						'required'             => array( 'map' ),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'replace_colors' ),
+				),
+			),
+			array(
+				'name' => 'kadence/site-fingerprint',
+				'args' => array(
+					'label'       => __( 'Vingerafdruk van de site', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'Hashes van palet, typografie, fonts, termen, Kadence-objecten en plugins, om twee sites te vergelijken.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Voor het vergelijken van twee sites (lokaal en staging) op wat niet in de blokken staat en wat een pixelvergelijking pas laat zien: palet, typografie (met opgeslagen of standaard), fonts, termen met hun beschrijving, of taxonomieën publiek opvraagbaar zijn, Kadence-objecten (per titel een hash van inhoud en meta, zonder ID\'s en domein), actieve plugins met versie en de leesinstellingen. Draai het op beide sites en vergelijk de hashes; waar er een verschilt, vraag opnieuw met detail: true en vergelijk dat onderdeel. Schrijft niets.', 'mcp-abilities-kadence' ),
+					'input_schema' => array(
+						'type'       => 'object',
+						'default'    => (object) array(),
+						'properties' => array(
+							'detail' => array(
+								'type'        => 'boolean',
+								'default'     => false,
+								'description' => __( 'Ook de waarden zelf teruggeven, niet alleen de hashes.', 'mcp-abilities-kadence' ),
+							),
+						),
+						'additionalProperties' => false,
+					),
+					'execute_callback' => array( __CLASS__, 'site_fingerprint' ),
 				),
 			),
 			array(
@@ -612,12 +712,16 @@ class Kadence_MCP_Abilities_Site {
 				)
 			);
 
-			$items = array();
+			$items      = array();
+			$onleesbaar = 0;
 
 			foreach ( $posts as $post ) {
 				// Dezelfde regel als bij inspect-post: de tool mogen gebruiken
-				// is niet hetzelfde als elke post mogen zien.
+				// is niet hetzelfde als elke post mogen zien. Wel tellen: een
+				// post die er is maar niet leesbaar, zag er tot 1.26.0 uit als
+				// een post die er niet is — en werd dan opnieuw aangemaakt.
 				if ( ! current_user_can( 'read_post', $post->ID ) ) {
+					$onleesbaar++;
 					continue;
 				}
 
@@ -635,11 +739,13 @@ class Kadence_MCP_Abilities_Site {
 				'label'     => isset( $object->labels->name ) ? $object->labels->name : $naam,
 				'public'    => (bool) $object->public,
 				'returned'  => count( $items ),
+				'unreadable' => $onleesbaar,
 				'items'     => $items,
 			);
 		}
 
-		$totaal   = array_sum( wp_list_pluck( $uitvoer, 'returned' ) );
+		$totaal     = array_sum( wp_list_pluck( $uitvoer, 'returned' ) );
+		$verborgen  = array_sum( wp_list_pluck( $uitvoer, 'unreadable' ) );
 		$onbekend = array_values( array_diff( $gevraagd, wp_list_pluck( $uitvoer, 'post_type' ) ) );
 
 		$status = '';
@@ -663,6 +769,14 @@ class Kadence_MCP_Abilities_Site {
 			);
 		}
 
+		if ( $verborgen > 0 ) {
+			$status .= ' ' . sprintf(
+				/* translators: %d: number of posts. */
+				__( 'LET OP: %d posts bestaan wel maar zijn voor dit account niet leesbaar (unreadable per posttype). Maak ze niet opnieuw aan; kijk met check-access welk recht er ontbreekt.', 'mcp-abilities-kadence' ),
+				$verborgen
+			);
+		}
+
 		return array(
 			'post_types' => $uitvoer,
 			'status'     => $status,
@@ -677,6 +791,12 @@ class Kadence_MCP_Abilities_Site {
 	 * @return array
 	 */
 	public static function find_post( $input = array() ) {
+		$unique_id = isset( $input['unique_id'] ) ? trim( (string) $input['unique_id'] ) : '';
+
+		if ( '' !== $unique_id ) {
+			return self::find_post_op_unique_id( $unique_id, isset( $input['limit'] ) ? (int) $input['limit'] : 20 );
+		}
+
 		$slug  = isset( $input['slug'] ) ? trim( (string) $input['slug'] ) : '';
 		$zoek  = isset( $input['search'] ) ? trim( (string) $input['search'] ) : '';
 		$limit = isset( $input['limit'] ) ? (int) $input['limit'] : 20;
@@ -743,6 +863,75 @@ class Kadence_MCP_Abilities_Site {
 		return array(
 			'posts'  => $items,
 			'status' => $status,
+		);
+	}
+
+	/**
+	 * Zoek de posts waarin een blok met deze uniqueID staat.
+	 *
+	 * Een uniqueID blijft gelijk als een post naar een andere site gaat; het
+	 * post-ID niet. Hiermee vind je het tegenstuk op staging zonder ID-kaart.
+	 * Kadence bakt het post-ID van de bron in de uniqueID ("306_…"), dus die
+	 * wijst na een overzetting niet naar de juiste post — deze zoektocht wel.
+	 *
+	 * @param string $unique_id De uniqueID.
+	 * @param int    $limit     Maximaal aantal treffers.
+	 *
+	 * @return array
+	 */
+	private static function find_post_op_unique_id( $unique_id, $limit ) {
+		global $wpdb;
+
+		$limit = max( 1, min( 100, $limit ) );
+		$rijen = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_status NOT IN ('trash','auto-draft','inherit') AND post_type <> 'revision' AND post_content LIKE %s ORDER BY post_modified_gmt DESC LIMIT %d",
+				'%' . $wpdb->esc_like( '"uniqueID":"' . $unique_id . '"' ) . '%',
+				$limit
+			)
+		);
+		$items = array();
+
+		foreach ( $rijen as $rij ) {
+			$post = get_post( (int) $rij->ID );
+
+			if ( ! $post || ! current_user_can( 'read_post', $post->ID ) ) {
+				continue;
+			}
+
+			$blok = Kadence_MCP_Inventory::zoek_op_unique_id( parse_blocks( $post->post_content ), $unique_id );
+
+			// De LIKE vindt ook een uniqueID in een attribuutwaarde van een
+			// ander blok; alleen een echt blok telt.
+			if ( null === $blok ) {
+				continue;
+			}
+
+			$items[] = array(
+				'id'        => $post->ID,
+				'title'     => get_the_title( $post ),
+				'slug'      => $post->post_name,
+				'post_type' => $post->post_type,
+				'status'    => $post->post_status,
+				'modified'  => $post->post_modified_gmt,
+				'block'     => isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '',
+			);
+		}
+
+		return array(
+			'posts'  => $items,
+			'status' => empty( $items )
+				? sprintf(
+					/* translators: %s: uniqueID. */
+					__( 'leeg — geen blok met uniqueID "%s" op deze site, of niet leesbaar voor dit account.', 'mcp-abilities-kadence' ),
+					$unique_id
+				)
+				: sprintf(
+					/* translators: 1: number of posts, 2: uniqueID. */
+					__( '%1$d post(s) met een blok "%2$s". Staat hij in meer dan één post, dan is er gedupliceerd; kies op post_type en titel.', 'mcp-abilities-kadence' ),
+					count( $items ),
+					$unique_id
+				),
 		);
 	}
 
@@ -859,12 +1048,22 @@ class Kadence_MCP_Abilities_Site {
 		);
 
 		// Het id staat in de blokmarkup als "id":232. Op die vorm zoeken en
-		// niet op het kale getal, anders matcht elk toevallig voorkomen.
-		$naald    = '"id":' . $object_id;
+		// niet op het kale getal, anders matcht elk toevallig voorkomen. En met
+		// een grens erachter: tot 1.26.0 vond "id":2 ook "id":24 en "id":200.
+		$patroon  = '/"id":' . $object_id . '(?![0-9])/';
 		$gevonden = array();
 
 		foreach ( $posts as $post ) {
-			if ( false === strpos( $post->post_content, $naald ) ) {
+			if ( ! preg_match( $patroon, (string) $post->post_content ) ) {
+				continue;
+			}
+
+			// Dan per blok: kadence/tab en kadence/slide gebruiken "id" als
+			// volgnummer (1, 2, 3 …), niet als verwijzing. Zonder deze stap werd
+			// elke pagina met een tweede tab een "gebruik" van post 2.
+			$hits = self::tel_id_verwijzingen( parse_blocks( $post->post_content ), $object_id );
+
+			if ( ! $hits ) {
 				continue;
 			}
 
@@ -877,7 +1076,7 @@ class Kadence_MCP_Abilities_Site {
 				'title'     => get_the_title( $post ),
 				'post_type' => $post->post_type,
 				'status'    => $post->post_status,
-				'hits'      => substr_count( $post->post_content, $naald ),
+				'hits'      => $hits,
 			);
 		}
 
@@ -910,6 +1109,41 @@ class Kadence_MCP_Abilities_Site {
 			'scanned' => $gescand,
 			'status'  => $status,
 		);
+	}
+
+	/**
+	 * Blokken die "id" als volgnummer gebruiken en niet als verwijzing naar een post.
+	 */
+	const ID_ALS_VOLGNUMMER = array( 'kadence/tab', 'kadence/slide', 'kadence/pane' );
+
+	/**
+	 * Tel de blokken waarvan het attribuut id naar dit object wijst.
+	 *
+	 * @param array $blokken   De boom.
+	 * @param int   $object_id Het object.
+	 *
+	 * @return int
+	 */
+	private static function tel_id_verwijzingen( $blokken, $object_id ) {
+		$aantal = 0;
+
+		foreach ( $blokken as $blok ) {
+			$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+
+			if ( '' !== $naam
+				&& ! in_array( $naam, self::ID_ALS_VOLGNUMMER, true )
+				&& isset( $blok['attrs']['id'] )
+				&& is_numeric( $blok['attrs']['id'] )
+				&& (int) $blok['attrs']['id'] === (int) $object_id ) {
+				$aantal++;
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$aantal += self::tel_id_verwijzingen( $blok['innerBlocks'], $object_id );
+			}
+		}
+
+		return $aantal;
 	}
 
 	/**
@@ -955,17 +1189,24 @@ class Kadence_MCP_Abilities_Site {
 
 		$bindingen = array();
 
+		// Een query card en een Element (als kaart in een Post Grid) renderen
+		// per resultaat; daar gelden de lusregels.
+		self::$in_lus = in_array( $post->post_type, array( 'kadence_query_card', 'kadence_element' ), true );
+
 		self::loop_blokken( parse_blocks( $post->post_content ), $bindingen );
 		self::lees_query_meta( $post_id, $bindingen );
 
-		$kapot   = 0;
+		$kapot    = 0;
 		$onbekend = 0;
+		$waarsch  = 0;
 
 		foreach ( $bindingen as $b ) {
 			if ( 'dangelt' === $b['status'] ) {
 				++$kapot;
 			} elseif ( 'onverifieerbaar' === $b['status'] ) {
 				++$onbekend;
+			} elseif ( 'waarschuwing' === $b['status'] ) {
+				++$waarsch;
 			}
 		}
 
@@ -988,6 +1229,14 @@ class Kadence_MCP_Abilities_Site {
 			);
 		}
 
+		if ( $waarsch > 0 ) {
+			$status .= ' ' . sprintf(
+				/* translators: %d: number of warnings. */
+				__( '%d waarschuwingen (status waarschuwing): de verwijzing bestaat, maar zal in de praktijk niet doen wat je verwacht — lees de note.', 'mcp-abilities-kadence' ),
+				$waarsch
+			);
+		}
+
 		return array(
 			'post'     => array(
 				'id'        => $post->ID,
@@ -996,9 +1245,17 @@ class Kadence_MCP_Abilities_Site {
 			),
 			'bindings' => $bindingen,
 			'broken'   => $kapot,
+			'warnings' => $waarsch,
 			'status'   => $status,
 		);
 	}
+
+	/**
+	 * Rendert de post die check-bindings naloopt per resultaat van een lus?
+	 *
+	 * @var bool
+	 */
+	private static $in_lus = false;
 
 	/**
 	 * Loop de blokkenboom af en verzamel verwijzingen uit vier opslagplaatsen.
@@ -1039,6 +1296,22 @@ class Kadence_MCP_Abilities_Site {
 			// 2. Het kadenceDynamic-object, per slot.
 			if ( isset( $attrs['kadenceDynamic'] ) && is_array( $attrs['kadenceDynamic'] ) ) {
 				foreach ( $attrs['kadenceDynamic'] as $slot => $conf ) {
+					// Een dynamische achtergrond in een lus zonder inQueryBlock:
+					// Kadence plakt dan geen post-ID aan de klasse, en alle
+					// kaarten delen één CSS-regel en dus één foto. De editor
+					// haalt de vlag bovendien weg zodra het object los wordt
+					// opgeslagen (kadence-blocks-pro, query-rest-api.php).
+					if ( ( self::$in_lus || 'kadence/query-card' === $naam ) && is_array( $conf ) && ! empty( $conf['enable'] ) && 0 === strpos( (string) $slot, 'backgroundImg' ) && empty( $attrs['inQueryBlock'] ) ) {
+						$bindingen[] = array(
+							'block'     => $naam,
+							'unique_id' => $uid,
+							'where'     => 'kadenceDynamic.' . $slot,
+							'reference' => isset( $conf['field'] ) ? (string) $conf['field'] : '',
+							'status'    => 'waarschuwing',
+							'note'      => __( 'dynamische achtergrond in een lus zonder inQueryBlock: alle kaarten krijgen dezelfde foto. Zet inQueryBlock: true op dit blok — en weet dat de editor die vlag weghaalt zodra dit object los wordt opgeslagen; een filter kadence_blocks_in_query_block in het thema is duurzamer.', 'mcp-abilities-kadence' ),
+						);
+					}
+
 					if ( ! is_array( $conf ) || empty( $conf['enable'] ) || empty( $conf['field'] ) ) {
 						continue;
 					}
@@ -1396,6 +1669,900 @@ class Kadence_MCP_Abilities_Site {
 			'environment'    => Kadence_MCP_Inventory::get_environment(),
 			'styles'         => Kadence_MCP_Inventory::get_global_styles(),
 			'block_defaults' => Kadence_MCP_Inventory::get_block_defaults(),
+		);
+	}
+
+	/**
+	 * Wat mag dit account hier, per soort object?
+	 *
+	 * Een ontbrekend recht ziet er in de andere tools uit als "bestaat niet"
+	 * of als een stille aanpassing: zonder edit_theme_options zijn headers,
+	 * elementen, navigaties en vectoren niet te bewerken, en zonder
+	 * unfiltered_html haalt WordPress bij het opslaan SVG en scripts weg en
+	 * wordt & in een titel &amp;. Op 28-09-2026 leidde dat op staging tot
+	 * dubbel aangemaakte vectoren. Deze tool zegt het vooraf.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array
+	 */
+	public static function check_access( $input = array() ) {
+		$gebruiker = wp_get_current_user();
+		$types     = isset( $input['post_types'] ) && is_array( $input['post_types'] ) && ! empty( $input['post_types'] )
+			? array_map( 'strval', $input['post_types'] )
+			: array_values(
+				array_unique(
+					array_merge(
+						array_keys( Kadence_MCP_Inventory::get_post_types() ),
+						array_keys( get_post_types( array( 'public' => true ), 'names' ) )
+					)
+				)
+			);
+
+		$rechten = array();
+
+		foreach ( array(
+			Kadence_MCP_Capabilities::VIEW => __( 'Kadence MCP lezen', 'mcp-abilities-kadence' ),
+			Kadence_MCP_Capabilities::WRITE => __( 'Kadence MCP schrijven (elke schrijfability)', 'mcp-abilities-kadence' ),
+			'edit_theme_options' => __( 'headers, elementen, navigaties, vectoren, typografie en Extra CSS', 'mcp-abilities-kadence' ),
+			'unfiltered_html'    => __( 'SVG, scripts en & in titels ongeschonden opslaan', 'mcp-abilities-kadence' ),
+			'upload_files'       => __( 'media uploaden', 'mcp-abilities-kadence' ),
+			'manage_options'     => __( 'instellingen van plugins', 'mcp-abilities-kadence' ),
+		) as $cap => $waarvoor ) {
+			$rechten[] = array(
+				'capability' => $cap,
+				'granted'    => 0 === strpos( $cap, 'kadence_mcp_' ) ? Kadence_MCP_Capabilities::current_user_can( $cap ) : current_user_can( $cap ),
+				'for'        => $waarvoor,
+			);
+		}
+
+		$per_type       = array();
+		$waarschuwingen = array();
+
+		foreach ( $types as $type ) {
+			$object = get_post_type_object( $type );
+
+			if ( ! $object ) {
+				continue;
+			}
+
+			$caps  = $object->cap;
+			$ids   = get_posts(
+				array(
+					'post_type'        => $type,
+					'post_status'      => array( 'publish', 'private', 'draft', 'pending', 'future' ),
+					'numberposts'      => 200,
+					'fields'           => 'ids',
+					'suppress_filters' => true,
+				)
+			);
+			$lees  = 0;
+			$bewerk = 0;
+
+			foreach ( $ids as $id ) {
+				$lees   += current_user_can( 'read_post', $id ) ? 1 : 0;
+				$bewerk += current_user_can( 'edit_post', $id ) ? 1 : 0;
+			}
+
+			$regel = array(
+				'post_type' => $type,
+				'label'     => isset( $object->labels->name ) ? $object->labels->name : $type,
+				'posts'     => count( $ids ),
+				'readable'  => $lees,
+				'editable'  => $bewerk,
+				'can_create'  => current_user_can( $caps->create_posts ),
+				'can_publish' => current_user_can( $caps->publish_posts ),
+				'cap_type'    => $caps->edit_posts,
+			);
+
+			if ( $lees < count( $ids ) ) {
+				$waarschuwingen[] = sprintf(
+					/* translators: 1: post type, 2: hidden, 3: total, 4: capability. */
+					__( '%1$s: %2$d van de %3$d posts zijn voor dit account onleesbaar. list-entities en find-post tonen die niet, dus ze lijken er niet te zijn — maak ze dan niet opnieuw aan. Nodig: %4$s.', 'mcp-abilities-kadence' ),
+					$type,
+					count( $ids ) - $lees,
+					count( $ids ),
+					$caps->edit_posts
+				);
+			} elseif ( $bewerk < count( $ids ) ) {
+				$waarschuwingen[] = sprintf(
+					/* translators: 1: post type, 2: not editable, 3: total, 4: capability. */
+					__( '%1$s: %2$d van de %3$d posts zijn wel leesbaar maar niet te bewerken (nodig: %4$s).', 'mcp-abilities-kadence' ),
+					$type,
+					count( $ids ) - $bewerk,
+					count( $ids ),
+					$caps->edit_posts
+				);
+			}
+
+			$per_type[] = $regel;
+		}
+
+		if ( ! current_user_can( 'unfiltered_html' ) ) {
+			$waarschuwingen[] = __( 'Geen unfiltered_html: WordPress haalt bij het opslaan <svg>, <script> en inline-stijlen door kses, en maakt van & in een titel &amp;. Vectoren en custom SVG\'s kunnen daardoor leeg of beschadigd opgeslagen worden zonder foutmelding.', 'mcp-abilities-kadence' );
+		}
+
+		if ( ! current_user_can( 'edit_theme_options' ) ) {
+			$waarschuwingen[] = __( 'Geen edit_theme_options: headers, elementen, navigaties, vectoren, de typografie en de Extra CSS zijn niet te bewerken, en concepten daarvan niet te lezen.', 'mcp-abilities-kadence' );
+		}
+
+		return array(
+			'user'         => array(
+				'id'    => $gebruiker->ID,
+				'login' => $gebruiker->user_login,
+				'roles' => array_values( (array) $gebruiker->roles ),
+			),
+			'capabilities' => $rechten,
+			'post_types'   => $per_type,
+			'warnings'     => $waarschuwingen,
+			'status'       => empty( $waarschuwingen )
+				? __( 'Geen beperkingen gevonden voor de gevraagde posttypes.', 'mcp-abilities-kadence' )
+				: sprintf(
+					/* translators: %d: number of warnings. */
+					__( '%d beperkingen; lees warnings voordat je iets aanmaakt of overzet.', 'mcp-abilities-kadence' ),
+					count( $waarschuwingen )
+				),
+		);
+	}
+
+	/**
+	 * Welke kleur staat waar.
+	 *
+	 * Loopt de blokattributen van alle posts af, de _kad-meta van de
+	 * Kadence-objecten en de typografie van het thema, en groepeert per waarde:
+	 * paletverwijzing (palette3), CSS-variabele (var(--global-palette3),
+	 * var(--ol-…)), hex of rgba. Een hex die gelijk is aan een paletkleur wordt
+	 * apart gemeld: die ziet er goed uit maar beweegt niet mee als het palet
+	 * verandert.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array
+	 */
+	public static function audit_colors( $input = array() ) {
+		global $wpdb;
+
+		$limiet       = isset( $input['scan_limit'] ) ? max( 1, min( 2000, (int) $input['scan_limit'] ) ) : 500;
+		$alleen_buiten = ! empty( $input['only_off_palette'] );
+		$filter_waarde = isset( $input['value'] ) ? strtolower( trim( (string) $input['value'] ) ) : '';
+
+		$palet_hex = self::palet_hex();
+		$treffers  = array();
+
+		$noteer = static function ( $waarde, $waar ) use ( &$treffers, $palet_hex ) {
+			$waarde = trim( (string) $waarde );
+			$sleutel = strtolower( $waarde );
+
+			if ( ! isset( $treffers[ $sleutel ] ) ) {
+				$soort = 'overig';
+				$gelijk = '';
+
+				if ( preg_match( '/^palette\d+$/', $sleutel ) ) {
+					$soort = 'palet';
+				} elseif ( preg_match( '/^var\(\s*--global-palette\d+/', $sleutel ) ) {
+					$soort = 'palet-variabele';
+				} elseif ( 0 === strpos( $sleutel, 'var(' ) ) {
+					$soort = 'variabele';
+				} elseif ( preg_match( '/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/', $sleutel ) ) {
+					$soort = 'hex';
+					$zes   = strlen( $sleutel ) === 4 ? '#' . $sleutel[1] . $sleutel[1] . $sleutel[2] . $sleutel[2] . $sleutel[3] . $sleutel[3] : substr( $sleutel, 0, 7 );
+					$gelijk = isset( $palet_hex[ $zes ] ) ? $palet_hex[ $zes ] : '';
+				} elseif ( 0 === strpos( $sleutel, 'rgb' ) ) {
+					$soort = 'rgb';
+				}
+
+				$treffers[ $sleutel ] = array(
+					'value'       => $waarde,
+					'kind'        => $soort,
+					'same_as'     => $gelijk,
+					'count'       => 0,
+					'where'       => array(),
+				);
+			}
+
+			$treffers[ $sleutel ]['count']++;
+
+			if ( count( $treffers[ $sleutel ]['where'] ) < 25 && ! in_array( $waar, $treffers[ $sleutel ]['where'], true ) ) {
+				$treffers[ $sleutel ]['where'][] = $waar;
+			}
+		};
+
+		$is_kleur = static function ( $v ) {
+			return is_string( $v ) && (
+				preg_match( '/^palette\d+$/', trim( $v ) )
+				|| preg_match( '/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i', trim( $v ) )
+				|| preg_match( '/^rgba?\(/i', trim( $v ) )
+				|| preg_match( '/^var\(\s*--[a-z0-9-]+\s*\)$/i', trim( $v ) )
+			);
+		};
+
+		// Blokattributen.
+		$posts = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT ID, post_type, post_title, post_content FROM {$wpdb->posts} WHERE post_status IN ('publish','private','draft','future') AND post_type NOT IN ('revision','attachment','nav_menu_item','customize_changeset','oembed_cache','wp_font_face','wp_font_family') AND post_content LIKE %s ORDER BY ID LIMIT %d",
+				'%<!-- wp:%',
+				$limiet
+			)
+		);
+
+		foreach ( $posts as $post ) {
+			if ( ! current_user_can( 'read_post', $post->ID ) ) {
+				continue;
+			}
+
+			$loop = static function ( $blokken ) use ( &$loop, $noteer, $is_kleur, $post ) {
+				foreach ( $blokken as $blok ) {
+					$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+
+					if ( '' !== $naam && ! empty( $blok['attrs'] ) && is_array( $blok['attrs'] ) ) {
+						$uid = isset( $blok['attrs']['uniqueID'] ) ? (string) $blok['attrs']['uniqueID'] : $naam;
+
+						array_walk_recursive(
+							$blok['attrs'],
+							static function ( $v, $k ) use ( $noteer, $is_kleur, $post, $uid ) {
+								if ( $is_kleur( $v ) ) {
+									$noteer( $v, $post->post_type . ':' . $post->ID . ' ' . $uid . ' ' . $k );
+								}
+							}
+						);
+					}
+
+					if ( ! empty( $blok['innerBlocks'] ) ) {
+						$loop( $blok['innerBlocks'] );
+					}
+				}
+			};
+			$loop( parse_blocks( $post->post_content ) );
+		}
+
+		// Kadence-meta.
+		$meta = $wpdb->get_results(
+			"SELECT m.post_id, m.meta_key, m.meta_value FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} p ON p.ID = m.post_id WHERE p.post_status IN ('publish','private','draft') AND p.post_type <> 'revision' AND m.meta_key LIKE '\\_kad\\_%' AND m.meta_key NOT LIKE '\\_kad\\_font\\_%'"
+		);
+
+		foreach ( $meta as $rij ) {
+			if ( ! current_user_can( 'read_post', (int) $rij->post_id ) ) {
+				continue;
+			}
+
+			$waarde = maybe_unserialize( $rij->meta_value );
+
+			if ( is_string( $waarde ) && ( '{' === substr( $waarde, 0, 1 ) || '[' === substr( $waarde, 0, 1 ) ) ) {
+				$json   = json_decode( $waarde, true );
+				$waarde = null === $json ? $waarde : $json;
+			}
+
+			$waar = 'meta:' . $rij->post_id . ' ' . $rij->meta_key;
+
+			if ( is_array( $waarde ) ) {
+				array_walk_recursive(
+					$waarde,
+					static function ( $v ) use ( $noteer, $is_kleur, $waar ) {
+						if ( $is_kleur( $v ) ) {
+							$noteer( $v, $waar );
+						}
+					}
+				);
+			} elseif ( $is_kleur( $waarde ) ) {
+				$noteer( $waarde, $waar );
+			}
+		}
+
+		// Typografie van het thema.
+		$stijlen = Kadence_MCP_Inventory::get_global_styles();
+
+		foreach ( $stijlen['typography'] as $sleutel => $waarde ) {
+			if ( is_array( $waarde ) && isset( $waarde['color'] ) && $is_kleur( $waarde['color'] ) ) {
+				$noteer( $waarde['color'], 'theme_mod ' . $sleutel . '.color' );
+			}
+		}
+
+		$lijst = array_values( $treffers );
+
+		if ( '' !== $filter_waarde ) {
+			$lijst = array_values( array_filter( $lijst, static function ( $t ) use ( $filter_waarde ) {
+				return strtolower( $t['value'] ) === $filter_waarde;
+			} ) );
+		}
+
+		if ( $alleen_buiten ) {
+			$lijst = array_values( array_filter( $lijst, static function ( $t ) {
+				return in_array( $t['kind'], array( 'hex', 'rgb', 'overig' ), true );
+			} ) );
+		}
+
+		usort( $lijst, static function ( $a, $b ) {
+			return $b['count'] - $a['count'];
+		} );
+
+		$hardgecodeerd = count( array_filter( $lijst, static function ( $t ) {
+			return 'hex' === $t['kind'] && '' !== $t['same_as'];
+		} ) );
+		$buiten = count( array_filter( $lijst, static function ( $t ) {
+			return 'hex' === $t['kind'] && '' === $t['same_as'];
+		} ) );
+
+		return array(
+			'palette' => $palet_hex,
+			'colors'  => $lijst,
+			'scanned' => array(
+				'posts' => count( $posts ),
+				'meta'  => count( $meta ),
+				'limit' => $limiet,
+			),
+			'status'  => sprintf(
+				/* translators: 1: distinct values, 2: hex equal to palette, 3: hex outside palette, 4: posts scanned. */
+				__( '%1$d verschillende kleurwaarden; %2$d hex-waarden zijn gelijk aan een paletkleur (hardgecodeerd, bewegen niet mee), %3$d hex-waarden staan buiten het palet. %4$d posts gescand; rgba met een alfa telt als eigen waarde. Wat in CSS-bestanden van het thema staat, zie je hier niet.', 'mcp-abilities-kadence' ),
+				count( $lijst ),
+				$hardgecodeerd,
+				$buiten,
+				count( $posts )
+			) . ( count( $posts ) >= $limiet ? ' ' . __( 'LET OP: de scanlimiet is bereikt; verhoog scan_limit voor een volledig beeld.', 'mcp-abilities-kadence' ) : '' ),
+		);
+	}
+
+	/**
+	 * Zet kleuren om over de hele site, of over een paar posts.
+	 *
+	 * Op 28-09-2026 ging dit met eigen WP-CLI- en REST-scripts (menulinks van
+	 * #04201A naar palette3, formulierranden, iconen). Hier met één kaart
+	 * {oud: nieuw}, een voorstel per post en per meta-sleutel, een token, één
+	 * revisie per post en teruglezen. Drie gevallen worden overgeslagen, met
+	 * de reden erbij:
+	 * - een var(--…) waar Kadence een opacity op toepast (hex2rgba breekt een
+	 *   variabele);
+	 * - een paletN in een blok dat Kadence niet is (core kent die naam niet);
+	 * - een niet-hex waarde in een Gravity Forms-blok (dat neemt alleen hex).
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function replace_colors( $input = array() ) {
+		$kaart = array();
+
+		foreach ( ( isset( $input['map'] ) && is_array( $input['map'] ) ? $input['map'] : array() ) as $van => $naar ) {
+			$van  = strtolower( trim( (string) $van ) );
+			$naar = trim( (string) $naar );
+
+			if ( '' !== $van && '' !== $naar && $van !== strtolower( $naar ) ) {
+				$kaart[ $van ] = $naar;
+			}
+		}
+
+		if ( empty( $kaart ) ) {
+			return new WP_Error( 'kadence_mcp_no_color_map', __( 'Geef map op: {"#04201a":"palette3", …}. Oud is hoofdletterongevoelig.', 'mcp-abilities-kadence' ) );
+		}
+
+		$post_ids = isset( $input['post_ids'] ) && is_array( $input['post_ids'] ) ? array_map( 'intval', $input['post_ids'] ) : array();
+		$met_meta = ! isset( $input['include_meta'] ) || ! empty( $input['include_meta'] );
+		$plan     = self::kleurplan( $kaart, $post_ids, $met_meta );
+
+		$aantal = 0;
+
+		foreach ( $plan['posts'] as $p ) {
+			$aantal += count( $p['changes'] );
+		}
+
+		foreach ( $plan['meta'] as $m ) {
+			$aantal += count( $m['changes'] );
+		}
+
+		$verwacht = 'kmcp1_' . substr( wp_hash( (string) wp_json_encode( array( $kaart, $plan['fingerprint'] ) ) ), 0, 32 );
+		$token    = isset( $input['token'] ) ? (string) $input['token'] : '';
+
+		if ( '' === $token || 0 === $aantal ) {
+			return array(
+				'map'      => $kaart,
+				'posts'    => $plan['posts'],
+				'meta'     => $plan['meta'],
+				'skipped'  => $plan['skipped'],
+				'written'  => false,
+				'token'    => $aantal > 0 ? $verwacht : '',
+				'status'   => 0 === $aantal
+					? __( 'Niets om te wijzigen: geen van de oude waarden staat (nog) in de gescande inhoud of meta.', 'mcp-abilities-kadence' ) . ( empty( $plan['skipped'] ) ? '' : ' ' . __( 'Wel overgeslagen plekken, zie skipped.', 'mcp-abilities-kadence' ) )
+					: sprintf(
+						/* translators: 1: changes, 2: posts, 3: meta items, 4: skipped. */
+						__( 'Voorstel, er is NIETS opgeslagen. %1$d wijzigingen in %2$d posts en %3$d meta-sleutels; %4$d plekken overgeslagen (zie skipped, met reden). Posts krijgen een revisie, meta niet: bewaar per meta-item het veld from. Roep opnieuw aan met dezelfde invoer en het token om alles te schrijven.', 'mcp-abilities-kadence' ),
+						$aantal,
+						count( $plan['posts'] ),
+						count( $plan['meta'] ),
+						count( $plan['skipped'] )
+					),
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) ) {
+			return new WP_Error( 'kadence_mcp_write_denied', __( 'Je hebt de capability kadence_mcp_write niet.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
+		if ( ! hash_equals( $verwacht, $token ) ) {
+			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer, of er is intussen iets gewijzigd in een van de posts of meta. Vraag opnieuw een voorstel.', 'mcp-abilities-kadence' ) );
+		}
+
+		$fouten = array();
+
+		foreach ( $plan['posts'] as $p ) {
+			if ( ! current_user_can( 'edit_post', $p['post_id'] ) ) {
+				$fouten[] = sprintf( __( 'post %d: geen bewerkrecht', 'mcp-abilities-kadence' ), $p['post_id'] );
+				continue;
+			}
+
+			$resultaat = wp_update_post( array( 'ID' => $p['post_id'], 'post_content' => wp_slash( $p['content'] ) ), true );
+
+			if ( is_wp_error( $resultaat ) ) {
+				$fouten[] = sprintf( 'post %d: %s', $p['post_id'], $resultaat->get_error_message() );
+				continue;
+			}
+
+			clean_post_cache( $p['post_id'] );
+
+			if ( (string) get_post_field( 'post_content', $p['post_id'] ) !== $p['content'] ) {
+				$fouten[] = sprintf( __( 'post %d: na het opslaan wijkt de inhoud af (een filter heeft ingegrepen)', 'mcp-abilities-kadence' ), $p['post_id'] );
+			}
+		}
+
+		foreach ( $plan['meta'] as $m ) {
+			if ( ! current_user_can( 'edit_post', $m['post_id'] ) ) {
+				$fouten[] = sprintf( __( 'meta %1$d %2$s: geen bewerkrecht', 'mcp-abilities-kadence' ), $m['post_id'], $m['key'] );
+				continue;
+			}
+
+			update_post_meta( $m['post_id'], $m['key'], $m['value'] );
+
+			if ( ! Kadence_MCP_Inventory::meta_gelijk( get_post_meta( $m['post_id'], $m['key'], true ), $m['value'] ) ) {
+				$fouten[] = sprintf( __( 'meta %1$d %2$s: na het opslaan wijkt de waarde af', 'mcp-abilities-kadence' ), $m['post_id'], $m['key'] );
+			}
+		}
+
+		$weergave = static function ( $lijst ) {
+			return array_map(
+				static function ( $x ) {
+					unset( $x['content'], $x['value'] );
+
+					return $x;
+				},
+				$lijst
+			);
+		};
+
+		return array(
+			'map'     => $kaart,
+			'posts'   => $weergave( $plan['posts'] ),
+			'meta'    => $weergave( $plan['meta'] ),
+			'skipped' => $plan['skipped'],
+			'written' => empty( $fouten ),
+			'errors'  => $fouten,
+			'token'   => '',
+			'status'  => empty( $fouten )
+				? sprintf(
+					/* translators: 1: changes, 2: posts, 3: meta. */
+					__( 'geschreven en teruggelezen: %1$d wijzigingen in %2$d posts (elk één revisie) en %3$d meta-sleutels (geen revisie; oude waarden in meta[].changes[].from).', 'mcp-abilities-kadence' ),
+					$aantal,
+					count( $plan['posts'] ),
+					count( $plan['meta'] )
+				)
+				: __( 'LET OP: niet alles is geschreven zoals bedoeld; zie errors. De rest staat er wel.', 'mcp-abilities-kadence' ),
+		);
+	}
+
+	/**
+	 * Bouw het plan voor replace_colors.
+	 *
+	 * @param array $kaart    Oud (lowercase) => nieuw.
+	 * @param int[] $post_ids Beperk tot deze posts; leeg is alles.
+	 * @param bool  $met_meta Ook _kad-meta.
+	 *
+	 * @return array
+	 */
+	private static function kleurplan( $kaart, $post_ids, $met_meta ) {
+		global $wpdb;
+
+		$waar = empty( $post_ids ) ? '' : ' AND ID IN (' . implode( ',', array_map( 'intval', $post_ids ) ) . ')';
+		$rijen = $wpdb->get_results( "SELECT ID FROM {$wpdb->posts} WHERE post_status IN ('publish','private','draft','future','pending') AND post_type NOT IN ('revision','attachment','nav_menu_item','customize_changeset','oembed_cache')" . $waar . ' ORDER BY ID' );
+
+		$posts   = array();
+		$meta    = array();
+		$overslaan = array();
+		$vinger  = array();
+
+		foreach ( $rijen as $rij ) {
+			$post = get_post( (int) $rij->ID );
+
+			if ( ! $post || ! current_user_can( 'read_post', $post->ID ) || false === strpos( $post->post_content, '<!-- wp:' ) ) {
+				continue;
+			}
+
+			$wijzigingen = array();
+			$boom        = parse_blocks( $post->post_content );
+			$nieuwe_boom = self::vervang_kleuren_in_boom( $boom, $kaart, $post, $wijzigingen, $overslaan, array() );
+
+			if ( ! empty( $wijzigingen ) ) {
+				$inhoud  = Kadence_MCP_Inventory::serialiseer( $nieuwe_boom );
+				$posts[] = array(
+					'post_id' => $post->ID,
+					'title'   => get_the_title( $post ),
+					'type'    => $post->post_type,
+					'changes' => $wijzigingen,
+					'content' => $inhoud,
+				);
+				$vinger[] = $post->ID . ':' . $post->post_modified_gmt;
+			}
+		}
+
+		if ( $met_meta ) {
+			$metarijen = $wpdb->get_results(
+				"SELECT m.post_id, m.meta_key FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} p ON p.ID = m.post_id WHERE p.post_status IN ('publish','private','draft') AND p.post_type <> 'revision' AND m.meta_key LIKE '\\_kad\\_%' AND m.meta_key NOT LIKE '\\_kad\\_font\\_%'" . ( empty( $post_ids ) ? '' : ' AND m.post_id IN (' . implode( ',', array_map( 'intval', $post_ids ) ) . ')' )
+			);
+
+			foreach ( $metarijen as $rij ) {
+				if ( ! current_user_can( 'read_post', (int) $rij->post_id ) ) {
+					continue;
+				}
+
+				$oud      = get_post_meta( (int) $rij->post_id, $rij->meta_key, true );
+				$gevonden = array();
+				$nieuw    = self::vervang_kleuren_in_waarde( $oud, $kaart, $gevonden, '', is_array( $oud ) ? $oud : array() );
+				$wijzigingen = array();
+
+				// Dezelfde uitzonderingen als bij blokken: een schaduw in meta is
+				// {color, opacity}, en daar breekt een var() net zo goed.
+				foreach ( $gevonden as $w ) {
+					$reden = self::kleur_overslaan( Kadence_MCP_Inventory::BLOCK_PREFIX . 'meta', $w, is_array( $oud ) ? $oud : array() );
+
+					if ( '' !== $reden ) {
+						$overslaan[] = array( 'post_id' => (int) $rij->post_id, 'meta_key' => $rij->meta_key, 'attribute' => $w['path'], 'from' => $w['from'], 'to' => $w['to'], 'reason' => $reden );
+						$nieuw       = self::zet_op_pad( $nieuw, $w['sub'], $w['from'] );
+						continue;
+					}
+
+					$wijzigingen[] = array( 'attribute' => $w['path'], 'from' => $w['from'], 'to' => $w['to'] );
+				}
+
+				if ( ! empty( $wijzigingen ) ) {
+					$meta[]   = array(
+						'post_id' => (int) $rij->post_id,
+						'key'     => $rij->meta_key,
+						'changes' => $wijzigingen,
+						'value'   => $nieuw,
+					);
+					$vinger[] = $rij->post_id . ':' . $rij->meta_key . ':' . md5( maybe_serialize( $oud ) );
+				}
+			}
+		}
+
+		return array(
+			'posts'       => $posts,
+			'meta'        => $meta,
+			'skipped'     => $overslaan,
+			'fingerprint' => $vinger,
+		);
+	}
+
+	/**
+	 * Vervang kleuren in de attributen van een boom.
+	 *
+	 * @param array   $blokken     De boom.
+	 * @param array   $kaart       Oud => nieuw.
+	 * @param WP_Post $post        De post.
+	 * @param array   $wijzigingen Verzamelaar.
+	 * @param array   $overslaan   Verzamelaar.
+	 * @param int[]   $pad         Intern.
+	 *
+	 * @return array
+	 */
+	private static function vervang_kleuren_in_boom( $blokken, $kaart, $post, &$wijzigingen, &$overslaan, $pad ) {
+		foreach ( $blokken as $i => $blok ) {
+			$hier = array_merge( $pad, array( (int) $i ) );
+			$naam = isset( $blok['blockName'] ) ? (string) $blok['blockName'] : '';
+
+			if ( '' !== $naam && ! empty( $blok['attrs'] ) && is_array( $blok['attrs'] ) ) {
+				$sleutel = isset( $blok['attrs']['uniqueID'] ) ? (string) $blok['attrs']['uniqueID'] : Kadence_MCP_Inventory::PAD_PREFIX . implode( '.', $hier );
+
+				foreach ( $blok['attrs'] as $attr => $waarde ) {
+					$hier_w = array();
+					$nieuw  = self::vervang_kleuren_in_waarde( $waarde, $kaart, $hier_w, (string) $attr, $blok['attrs'] );
+
+					foreach ( $hier_w as $w ) {
+						$reden = self::kleur_overslaan( $naam, $w, $blok['attrs'] );
+
+						if ( '' !== $reden ) {
+							$overslaan[] = array( 'post_id' => $post->ID, 'block' => $sleutel, 'attribute' => $w['path'], 'from' => $w['from'], 'to' => $w['to'], 'reason' => $reden );
+							// Terugzetten: deze ene waarde blijft zoals hij was.
+							$nieuw = self::zet_op_pad( $nieuw, $w['sub'], $w['from'] );
+							continue;
+						}
+
+						$wijzigingen[] = array( 'block' => $sleutel, 'name' => $naam, 'attribute' => $w['path'], 'from' => $w['from'], 'to' => $w['to'] );
+					}
+
+					$blokken[ $i ]['attrs'][ $attr ] = $nieuw;
+				}
+			}
+
+			if ( ! empty( $blok['innerBlocks'] ) ) {
+				$blokken[ $i ]['innerBlocks'] = self::vervang_kleuren_in_boom( $blok['innerBlocks'], $kaart, $post, $wijzigingen, $overslaan, $hier );
+			}
+		}
+
+		return $blokken;
+	}
+
+	/**
+	 * Vervang kleuren in één (geneste) waarde.
+	 *
+	 * @param mixed  $waarde      De waarde.
+	 * @param array  $kaart       Oud => nieuw.
+	 * @param array  $wijzigingen Verzamelaar: path, sub (sleutelpad), from, to.
+	 * @param string $pad         Het pad tot hier, voor de melding.
+	 * @param array  $broers      De attributen van het blok (voor de opacity-toets).
+	 * @param array  $sub         Intern sleutelpad binnen de waarde.
+	 *
+	 * @return mixed
+	 */
+	private static function vervang_kleuren_in_waarde( $waarde, $kaart, &$wijzigingen, $pad, $broers = array(), $sub = array() ) {
+		if ( is_string( $waarde ) ) {
+			$sleutel = strtolower( trim( $waarde ) );
+
+			if ( isset( $kaart[ $sleutel ] ) ) {
+				$wijzigingen[] = array( 'path' => $pad, 'sub' => $sub, 'from' => $waarde, 'to' => $kaart[ $sleutel ], 'siblings' => $broers );
+
+				return $kaart[ $sleutel ];
+			}
+
+			return $waarde;
+		}
+
+		if ( is_array( $waarde ) ) {
+			foreach ( $waarde as $k => $v ) {
+				$waarde[ $k ] = self::vervang_kleuren_in_waarde( $v, $kaart, $wijzigingen, '' === $pad ? (string) $k : $pad . '.' . $k, is_array( $v ) ? $v : $waarde, array_merge( $sub, array( $k ) ) );
+			}
+		}
+
+		return $waarde;
+	}
+
+	/**
+	 * Waarom deze ene vervanging niet door mag gaan, of ''.
+	 *
+	 * @param string $bloknaam De bloknaam.
+	 * @param array  $w        De vervanging.
+	 * @param array  $attrs    Alle attributen van het blok.
+	 *
+	 * @return string
+	 */
+	private static function kleur_overslaan( $bloknaam, $w, $attrs ) {
+		$naar     = (string) $w['to'];
+		$is_hex   = (bool) preg_match( '/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $naar );
+		$is_palet = (bool) preg_match( '/^palette\d+$/', $naar );
+		$is_var   = 0 === strpos( $naar, 'var(' );
+
+		if ( 0 === strpos( $bloknaam, 'gravityforms/' ) && ! $is_hex ) {
+			return __( 'Gravity Forms neemt in het formulierblok alleen hex aan.', 'mcp-abilities-kadence' );
+		}
+
+		if ( $is_palet && 0 !== strpos( $bloknaam, Kadence_MCP_Inventory::BLOCK_PREFIX ) ) {
+			return __( 'een paletnaam werkt alleen in Kadence-blokken; core leest palette3 niet (gebruik var(--global-palette3)).', 'mcp-abilities-kadence' );
+		}
+
+		if ( $is_var ) {
+			// Een opacity naast de kleur: in hetzelfde object (schaduw
+			// {color, opacity}) of als broer met Opacity in de naam.
+			$broers = isset( $w['siblings'] ) && is_array( $w['siblings'] ) ? $w['siblings'] : array();
+
+			if ( isset( $broers['opacity'] ) && is_numeric( $broers['opacity'] ) && (float) $broers['opacity'] < 1 ) {
+				return __( 'er hoort een opacity bij; Kadence rekent dan hex om naar rgba, en dat breekt een var(). Gebruik een hex of een paletnaam.', 'mcp-abilities-kadence' );
+			}
+
+			// De oudere schaduwvorm als lijst: [aan, kleur, opacity, x, y, blur, spread, inset].
+			$laatste = empty( $w['sub'] ) ? null : end( $w['sub'] );
+
+			if ( 1 === $laatste && isset( $broers[0], $broers[2] ) && is_bool( $broers[0] ) && is_numeric( $broers[2] ) && (float) $broers[2] < 1 ) {
+				return __( 'dit is een schaduw [aan, kleur, opacity, …] met een opacity; Kadence rekent de kleur dan om naar rgba, en dat breekt een var(). Gebruik een hex of een paletnaam.', 'mcp-abilities-kadence' );
+			}
+
+			$attr = strtok( (string) $w['path'], '.' );
+
+			foreach ( array( $attr . 'Opacity', $attr . 'opacity' ) as $o ) {
+				if ( isset( $attrs[ $o ] ) && is_numeric( $attrs[ $o ] ) && (float) $attrs[ $o ] < 1 ) {
+					return sprintf( __( '%s staat onder de 1; Kadence rekent dan hex om naar rgba, en dat breekt een var(). Gebruik een hex of een paletnaam.', 'mcp-abilities-kadence' ), $o );
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Zet een waarde op een sleutelpad binnen een geneste waarde.
+	 *
+	 * @param mixed $waarde De waarde.
+	 * @param array $pad    De sleutels.
+	 * @param mixed $nieuw  De nieuwe waarde.
+	 *
+	 * @return mixed
+	 */
+	private static function zet_op_pad( $waarde, $pad, $nieuw ) {
+		if ( empty( $pad ) ) {
+			return $nieuw;
+		}
+
+		$k = array_shift( $pad );
+
+		if ( is_array( $waarde ) && array_key_exists( $k, $waarde ) ) {
+			$waarde[ $k ] = self::zet_op_pad( $waarde[ $k ], $pad, $nieuw );
+		}
+
+		return $waarde;
+	}
+
+	/**
+	 * Het actieve palet als hex => paletN.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function palet_hex() {
+		$stijlen = Kadence_MCP_Inventory::get_global_styles();
+		$waarde  = isset( $stijlen['palette']['value'] ) && is_array( $stijlen['palette']['value'] ) ? $stijlen['palette']['value'] : array();
+		$actief  = isset( $waarde['active'] ) ? (string) $waarde['active'] : 'palette';
+		$set     = isset( $waarde[ $actief ] ) && is_array( $waarde[ $actief ] ) ? $waarde[ $actief ] : array();
+		$uit     = array();
+
+		foreach ( $set as $kleur ) {
+			if ( isset( $kleur['color'], $kleur['slug'] ) ) {
+				$hex = strtolower( (string) $kleur['color'] );
+
+				if ( ! isset( $uit[ $hex ] ) ) {
+					$uit[ $hex ] = (string) $kleur['slug'];
+				}
+			}
+		}
+
+		return $uit;
+	}
+
+	/**
+	 * Een vingerafdruk van de site, om twee sites structureel te vergelijken.
+	 *
+	 * Alles op stabiele sleutels (slug, titel, meta-sleutel) en niet op ID's,
+	 * want die verschillen tussen lokaal en staging. Per onderdeel een hash, zodat
+	 * twee vingerafdrukken in één oogopslag te vergelijken zijn; met detail aan
+	 * komen de waarden zelf mee. Bedoeld voor wat een pixelvergelijking pas laat
+	 * ziet: een term-beschrijving die alleen op staging staat, typografie die
+	 * lokaal niet is ingesteld, een ontbrekend font.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array
+	 */
+	public static function site_fingerprint( $input = array() ) {
+		global $wpdb;
+
+		$detail = ! empty( $input['detail'] );
+		$delen  = array();
+
+		$stijlen = Kadence_MCP_Inventory::get_global_styles();
+		$omgeving = Kadence_MCP_Inventory::get_environment();
+
+		$delen['environment'] = $omgeving;
+		$delen['palette']     = isset( $stijlen['palette']['value'] ) ? $stijlen['palette']['value'] : null;
+		$delen['typography']  = array(
+			'values'  => $stijlen['typography'],
+			'sources' => isset( $stijlen['typography_sources'] ) ? $stijlen['typography_sources'] : array(),
+		);
+		$delen['fonts'] = array_map(
+			static function ( $face ) {
+				// De URL's verschillen per domein; de bestandsnaam niet.
+				$face['files'] = array_map( 'wp_basename', $face['files'] );
+				unset( $face['post_id'] );
+
+				return $face;
+			},
+			$stijlen['fonts']['faces']
+		);
+
+		// Termen van publieke taxonomieën, met hun beschrijving.
+		$termen = array();
+
+		foreach ( get_taxonomies( array( 'public' => true ), 'objects' ) as $tax ) {
+			if ( in_array( $tax->name, array( 'post_format' ), true ) ) {
+				continue;
+			}
+
+			foreach ( get_terms( array( 'taxonomy' => $tax->name, 'hide_empty' => false ) ) as $term ) {
+				$termen[ $tax->name ][ $term->slug ] = array(
+					'name'        => $term->name,
+					'description' => $term->description,
+					'parent'      => $term->parent ? get_term( $term->parent )->slug : '',
+				);
+			}
+
+			$delen['taxonomies'][ $tax->name ] = array(
+				'public'             => (bool) $tax->public,
+				'publicly_queryable' => (bool) $tax->publicly_queryable,
+				'object_type'        => array_values( (array) $tax->object_type ),
+			);
+		}
+
+		$delen['terms'] = $termen;
+
+		// Kadence-objecten: per posttype op titel, met een hash van inhoud en meta.
+		// Inhoud en meta bevatten ID's en domeinen, dus die gaan er voor de hash
+		// uit — anders verschilt alles, altijd.
+		$entiteiten = array();
+		$domein     = wp_parse_url( home_url(), PHP_URL_HOST );
+
+		foreach ( array_keys( Kadence_MCP_Inventory::get_post_types() ) as $type ) {
+			foreach ( get_posts( array( 'post_type' => $type, 'post_status' => array( 'publish', 'private', 'draft' ), 'numberposts' => 300, 'suppress_filters' => true ) ) as $post ) {
+				if ( ! current_user_can( 'read_post', $post->ID ) ) {
+					continue;
+				}
+
+				$meta = array();
+
+				foreach ( get_post_meta( $post->ID ) as $sleutel => $waarden ) {
+					if ( 0 === strpos( $sleutel, '_kad_' ) && 0 !== strpos( $sleutel, '_kad_font_' ) ) {
+						$meta[ $sleutel ] = $waarden[0];
+					}
+				}
+
+				ksort( $meta );
+
+				$schoon = static function ( $tekst ) use ( $domein ) {
+					$tekst = str_replace( (string) $domein, '{domein}', (string) $tekst );
+					$tekst = preg_replace( '/"(id|postId|ID|mediaId|bgImgID|imgID|parent)":\d+/', '"$1":0', $tekst );
+
+					return preg_replace( '/"uniqueID":"\d+_/', '"uniqueID":"_', $tekst );
+				};
+
+				$sleutel = $post->post_title . ( '' !== $post->post_name ? ' (' . $post->post_name . ')' : '' );
+
+				$entiteiten[ $type ][ $sleutel ] = array(
+					'status'       => $post->post_status,
+					'content_hash' => md5( $schoon( $post->post_content ) ),
+					'meta_hash'    => md5( $schoon( wp_json_encode( $meta ) ) ),
+				);
+			}
+		}
+
+		$delen['entities'] = $entiteiten;
+
+		// Actieve plugins met versie.
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		$plugins = array();
+
+		foreach ( get_plugins() as $bestand => $data ) {
+			if ( is_plugin_active( $bestand ) ) {
+				$plugins[ dirname( $bestand ) ] = $data['Version'];
+			}
+		}
+
+		ksort( $plugins );
+		$delen['plugins'] = $plugins;
+
+		$delen['reading'] = array(
+			'show_on_front'       => get_option( 'show_on_front' ),
+			'page_on_front'       => (int) get_option( 'page_on_front' ) ? get_post_field( 'post_name', (int) get_option( 'page_on_front' ) ) : '',
+			'permalink_structure' => get_option( 'permalink_structure' ),
+			'blog_public'         => (int) get_option( 'blog_public' ),
+		);
+
+		$hashes = array();
+
+		foreach ( $delen as $naam => $inhoud ) {
+			$hashes[ $naam ] = substr( md5( wp_json_encode( 'environment' === $naam ? array_diff_key( $inhoud, array( 'page_cache' => 1 ) ) : $inhoud ) ), 0, 12 );
+		}
+
+		return array(
+			'site'   => home_url(),
+			'hashes' => $hashes,
+			'parts'  => $detail ? $delen : null,
+			'status' => $detail
+				? __( 'Vingerafdruk met details. Vergelijk hashes met die van de andere site; waar een hash verschilt, vergelijk dat onderdeel in parts. entities vergelijkt op titel (slug), zonder ID\'s en domein.', 'mcp-abilities-kadence' )
+				: __( 'Alleen hashes. Draai dit op beide sites; waar een hash verschilt, vraag opnieuw met detail: true en vergelijk dat onderdeel.', 'mcp-abilities-kadence' ),
 		);
 	}
 }
