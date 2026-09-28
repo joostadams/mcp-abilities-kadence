@@ -530,7 +530,7 @@ class Kadence_MCP_Abilities_Query {
 			$voor[ $sleutel ] = $oud;
 			$na[ $sleutel ]   = $waarde;
 
-			if ( wp_json_encode( $oud ) === wp_json_encode( $waarde ) ) {
+			if ( Kadence_MCP_Inventory::meta_gelijk( $oud, $waarde ) ) {
 				continue;
 			}
 
@@ -593,7 +593,7 @@ class Kadence_MCP_Abilities_Query {
 		foreach ( $voorstel as $sleutel => $waarde ) {
 			$controle[ $sleutel ] = get_post_meta( $post->ID, $sleutel, true );
 
-			if ( wp_json_encode( $controle[ $sleutel ] ) !== wp_json_encode( $waarde ) ) {
+			if ( ! Kadence_MCP_Inventory::meta_gelijk( $controle[ $sleutel ], $waarde ) ) {
 				$afwijking[] = $sleutel;
 			}
 		}
@@ -868,7 +868,7 @@ class Kadence_MCP_Abilities_Query {
 		foreach ( $voorstel as $sleutel => $waarde ) {
 			$oud = isset( $voor[ $sleutel ] ) ? $voor[ $sleutel ] : null;
 
-			if ( wp_json_encode( $oud ) === wp_json_encode( $waarde ) ) {
+			if ( Kadence_MCP_Inventory::meta_gelijk( $oud, $waarde ) ) {
 				continue;
 			}
 
@@ -947,7 +947,7 @@ class Kadence_MCP_Abilities_Query {
 		update_post_meta( $post->ID, '_kad_query_query', $na );
 
 		$terug = Kadence_MCP_Query::instellingen( $post->ID );
-		$klopt = wp_json_encode( $terug ) === wp_json_encode( $na );
+		$klopt = Kadence_MCP_Inventory::meta_gelijk( $terug, $na );
 
 		return array_merge(
 			$rapport,
@@ -1827,7 +1827,7 @@ class Kadence_MCP_Abilities_Query {
 		foreach ( $schoon as $sleutel => $waarde ) {
 			$oud = isset( $voor[ $sleutel ] ) ? $voor[ $sleutel ] : null;
 
-			if ( wp_json_encode( $oud ) === wp_json_encode( $waarde ) ) {
+			if ( Kadence_MCP_Inventory::meta_gelijk( $oud, $waarde ) ) {
 				continue;
 			}
 
@@ -1890,7 +1890,7 @@ class Kadence_MCP_Abilities_Query {
 		$afwijking = array();
 
 		foreach ( $schoon as $sleutel => $waarde ) {
-			if ( wp_json_encode( $controle[ $sleutel ] ) !== wp_json_encode( $waarde ) ) {
+			if ( ! Kadence_MCP_Inventory::meta_gelijk( $controle[ $sleutel ], $waarde ) ) {
 				$afwijking[] = $sleutel;
 			}
 		}

@@ -1095,6 +1095,56 @@ class Kadence_MCP_Inventory {
 	}
 
 	/**
+	 * Zijn twee meta-waarden gelijk zoals WordPress ze bewaart?
+	 *
+	 * Post meta met een scalaire waarde komt bij het teruglezen altijd als
+	 * tekst terug: 240 wordt "240", true wordt "1" en false "". Een vergelijking
+	 * via wp_json_encode ziet dan een afwijking waar er geen is, en een
+	 * geslaagde schrijfactie wordt als mislukt gemeld (gebeurd bij een
+	 * navigatie-ID, 240 tegenover "240"). Hier tellen een getal en zijn
+	 * tekstvorm als gelijk, en true/"1" en false/"" ook; arrays worden per
+	 * sleutel vergeleken, met dezelfde regel voor de waarden.
+	 *
+	 * @param mixed $a De ene waarde.
+	 * @param mixed $b De andere waarde.
+	 *
+	 * @return bool
+	 */
+	public static function meta_gelijk( $a, $b ) {
+		if ( is_array( $a ) || is_array( $b ) ) {
+			if ( ! is_array( $a ) || ! is_array( $b ) || count( $a ) !== count( $b ) ) {
+				return false;
+			}
+			foreach ( $a as $sleutel => $waarde ) {
+				if ( ! array_key_exists( $sleutel, $b ) || ! self::meta_gelijk( $waarde, $b[ $sleutel ] ) ) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		if ( is_object( $a ) || is_object( $b ) ) {
+			return wp_json_encode( $a ) === wp_json_encode( $b );
+		}
+
+		$vorm = static function ( $w ) {
+			if ( true === $w ) {
+				return '1';
+			}
+			if ( false === $w || null === $w ) {
+				return '';
+			}
+			if ( is_int( $w ) || is_float( $w ) ) {
+				return (string) ( 0 + $w );
+			}
+			$w = (string) $w;
+			return is_numeric( $w ) ? (string) ( 0 + $w ) : $w;
+		};
+
+		return $vorm( $a ) === $vorm( $b );
+	}
+
+	/**
 	 * Het token dat een goedgekeurde toetsing bewijst.
 	 *
 	 * Zonder dit is `validate-write` een aansporing en geen poort: een agent kan

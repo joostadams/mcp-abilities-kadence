@@ -151,11 +151,22 @@ class Kadence_MCP_Profielen {
 			// inner-column-{id}
 			'id',
 			// kb-section-has-overlay, afgeleid uit een combinatie van
-			// achtergrond- en overlayvelden; die voorwaarde raden we niet.
+			// overlay- en achtergrondfotovelden; die voorwaarde raden we niet.
+			// Een achtergrondKLEUR (background) staat hier niet: die zet geen
+			// enkele klasse. Afgelezen op 28-09-2026 over 88 Secties met
+			// background zonder foto, overlay of link: allemaal alleen de
+			// richtingsklasse, net als zonder achtergrond.
 			'overlay',
 			'overlayGradient',
 			'bgImg',
-			'background',
+		),
+		'kadence/single-icon' => array(
+			// Met een link zet Kadence een <a class="kt-svg-icon-link"> om de
+			// span, met target/rel en aria-label afhankelijk van target en
+			// linkTitle, en data-title op de span als title gezet is. Het
+			// profiel kent alleen de vorm zonder link: opnieuw opbouwen zou de
+			// link stil weghalen (gezien bij het LinkedIn-icoon in een footer).
+			'link',
 		),
 		'kadence/slide' => array(
 			// ariaLabel gaat in save() als prop ariaLabel naar het li-element.
@@ -289,7 +300,7 @@ class Kadence_MCP_Profielen {
 			'kadence/single-icon' => array(
 				'open'  => '<div class="wp-block-kadence-single-icon kt-svg-style-default kt-svg-icon-wrap kt-svg-item-{ID}"><span data-name="{ATTR:icon}" data-stroke="{ATTR:width}" class="kadence-dynamic-icon">',
 				'sluit' => '</span></div>',
-				'let_op' => 'Hoort altijd in een kadence/icon. Het attribuut icon is een naam als fe_tag of fas_euro-sign; die namen verzin je niet maar lees je af van een bestaand blok. De span blijft leeg — Kadence zet daar bij het tonen de SVG in — maar de data-attributen erop moeten kloppen, want daar leest hij de naam en de lijndikte uit.',
+				'let_op' => 'Hoort altijd in een kadence/icon. Het attribuut icon is een naam als fe_tag of fas_euro-sign; die namen verzin je niet maar lees je af van een bestaand blok. De span blijft leeg — Kadence zet daar bij het tonen de SVG in — maar de data-attributen erop moeten kloppen, want daar leest hij de naam en de lijndikte uit. Een icoon met link (attribuut link) kan hier niet gebouwd of herbouwd worden: dan staat er een <a class="kt-svg-icon-link"> om de span, met target, rel, aria-label en data-title die van andere attributen afhangen. Kopieer zo een icoon met duplicate-blocks of prepare-import, of wijzig het in de editor.',
 			),
 
 			// Post Grid (Blocks Pro). Zelfsluitend: de hele kaart wordt bij het
@@ -378,7 +389,7 @@ class Kadence_MCP_Profielen {
 			// bij het tonen door PHP gerenderd.
 			'kadence/dynamichtml'         => array(
 				'zelfsluitend' => true,
-				'let_op'       => 'Toont één veld. Met field post|post_custom_field haal je een eigen veld op; zet dan para op kb_custom_input en custom op de meta-sleutel. Welke sleutels er zijn zie je met describe-post-type. Een verkeerde sleutel geeft een leeg blok zonder foutmelding.',
+				'let_op'       => 'Toont één veld. Met field post|post_custom_field haal je een eigen veld op; zet dan para op kb_custom_input en custom op de meta-sleutel. Welke sleutels er zijn zie je met describe-post-type. Een verkeerde sleutel geeft een leeg blok zonder foutmelding. Typografie per kopniveau (h1Typography t/m h6Typography) rendert alleen met de bijbehorende schakelaar enableH1 t/m enableH6 op true; zonder die schakelaar negeert de render het attribuut stil. textTypography en textColor gelden voor het blok én elke <p> erin, ook in een genest citaat of component (selector .kb-dynamic-html-id-… p): een component met een eigen tekstmaat verliest die dan.',
 			),
 			'kadence/dynamiclist'         => array(
 				'zelfsluitend' => true,

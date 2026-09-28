@@ -1,6 +1,6 @@
 ---
 name: kadence-blocks
-description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kadence-site via de Kadence MCP-server (kadence/list-blocks, describe-block, inspect-post, diff-blocks, list-entities, find-post, get-global-styles, validate-write, preview-write, set-attributes, set-text, duplicate-blocks, prepare-import). Laad dit vóór je een vraag beantwoordt over hoe een Kadence-pagina is opgebouwd, waarom twee blokken er anders uitzien, wat er moet veranderen voor mobiel, of voordat je iets schrijft."
+description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kadence-site via de Kadence MCP-server (kadence/list-blocks, describe-block, inspect-post, diff-blocks, list-entities, find-post, get-global-styles, validate-write, preview-write, set-attributes, set-text, move-blocks, update-post, duplicate-blocks, prepare-import). Laad dit vóór je een vraag beantwoordt over hoe een Kadence-pagina is opgebouwd, waarom twee blokken er anders uitzien, wat er moet veranderen voor mobiel, of voordat je iets schrijft."
 ---
 
 # Kadence uitlezen via MCP
@@ -8,7 +8,7 @@ description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kaden
 Deze skill beschrijft hoe je de Kadence MCP-server gebruikt zonder de fouten te
 maken die de toolschema's niet kunnen voorkomen.
 
-De server telt achtendertig abilities: negentien lezen, negentien schrijven.
+De server telt veertig abilities: negentien lezen, eenentwintig schrijven.
 **Schrijven is dus geen uitzondering** — controleer per tool of hij schrijft, in
 plaats van ervan uit te gaan dat lezen de norm is.
 
@@ -460,6 +460,12 @@ blokinhoud is onverwacht gewijzigd". Hij weigert daarom bij een blok met
 kindblokken, bij een innerHTML die niet precies één omhullend element is, en bij
 een lege tekst.
 
+Een `kadence/listitem` is de uitzondering op "tussen de buitenste tag": daar zit
+de tekst in `<span class="kt-svg-icon-list-text">`, met het icoon en eventueel een
+`<a class="kt-svg-icon-link">` eromheen. `set-text` vervangt daar alleen de
+inhoud van die span. Ontbreekt de span — markup die al eens is platgeslagen —
+dan weigert hij; herbouw het item dan met `replace-block`.
+
 HTML in de tekst overleeft alleen als opmaaktag: `strong`, `em`, `b`, `i`, `u`,
 `br`, `sub`, `sup`, `del`, `code`, `mark`, `span` en `a`. `mark` staat er bewust
 in — dat is waar Kadence Advanced Highlight mee werkt, en die zou anders bij elke
@@ -698,9 +704,17 @@ Gewone posts — diensten, markten, berichten — gaan niet als markup maar met
 doelsite), termen op slug, en ACF-velden op veldnaam. Hij toetst alles tegen het
 posttype en weigert wat daar niet bij hoort. Relatievelden wijzen naar post-ID's
 van de doelsite: maak dus eerst de posts waar andere naar verwijzen. Verwijzen
-posts over en weer naar elkaar (diensten onderling), dan kan één kant pas later,
-en dat gaat niet met `create-post` — die maakt aan, hij wijzigt niet. De nieuwe ID's gaan vervolgens in `post_map` van
-`prepare-import`.
+posts over en weer naar elkaar (diensten onderling), dan kan één kant pas later:
+maak ze eerst aan en vul de relatie daarna met **`update-post`**. De nieuwe ID's
+gaan vervolgens in `post_map` van `prepare-import`.
+
+`update-post` werkt als `set-text`: zonder token krijg je per onderdeel `before`
+en `after` plus een token, met dat token schrijft hij. Alleen wat je noemt
+verandert; `terms` vervangt de termen van de genoemde taxonomieën, en ACF-velden
+gaan op veldnaam of veldsleutel. Pagina's en Kadence-objecten weigert hij — die
+lopen via de blokken en `set-entity-meta`. Let op: alleen titel, slug en
+samenvatting krijgen een revisie. Termen, uitgelichte afbeelding en ACF-velden
+niet; de `before` in het antwoord is je weg terug.
 
 ## Ruimte in een Sectie, en andere stille no-ops
 
@@ -725,6 +739,21 @@ Een navigatie heeft in een pagina of header de vorm van een verwijzing
 (`kadence/navigation` met `id`, zelfsluitend); in de navigatiepost zelf staan de
 `kadence/navigation-link`-blokken erin. Allebei kan `generate-section` bouwen,
 net als `kadence/vector`.
+
+## Blokken verplaatsen: `move-blocks`
+
+Een blok naar een andere plek halen door het te verwijderen en opnieuw in te
+voegen kost zijn `uniqueID`, en daarmee de CSS per blok en elke verwijzing
+ernaar. **`kadence/move-blocks`** verplaatst binnen dezelfde post met behoud van
+ID: `position` is `before` of `after` het doelblok, of `inside_start` /
+`inside_end` erin. Meerdere blokken gaan mee in de volgorde van de post. Zelfde
+twee stappen: zonder token een voorstel met de nieuwe ouder, met token schrijven.
+
+Hij weigert wat Kadence stil zou breken: een Sectie uit of in een Row Layout (dat
+verandert het aantal kolommen, en `columns` staat vast in de rij), een slide of tab
+naar een andere ouder (slideCount en de tabtitels staan in de ouder), een blok
+waarvan de parent-regel het doel niet toelaat, en een doel dat in een van de
+verplaatste blokken ligt. Kolommen van een rij herschikken binnen die rij mag wel.
 
 ## Via de editor bouwen (`wp.data`)
 
@@ -1084,7 +1113,7 @@ wijzigen op een bestaand blok.
 
 ## Grenzen
 
-- Achttien abilities schrijven, alle met token of `expect_modified`. De
+- Eenentwintig abilities schrijven, alle met token of `expect_modified`. De
   overige negentien zijn alleen-lezen. Ga niet af op de naam: `generate-section`,
   `prepare-import` en `preview-write` klinken als schrijvers maar slaan niets
   op, terwijl

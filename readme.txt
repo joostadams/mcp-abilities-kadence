@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.24.0
+Stable tag: 1.25.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,16 +12,16 @@ Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema uitlezen en
 
 == Description ==
 
-Achtendertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
+Veertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
 de Kadence-opbouw van een site kan uitlezen en gericht kan wijzigen: welke
 blokken er zijn, welke attributen die hebben, hoe een pagina is opgebouwd,
 welke headers en elementen er staan, en welk kleurenpalet er geldt.
 
-Negentien daarvan zijn alleen-lezen. Negentien schrijven: set-attributes,
-style-blocks, set-text, insert-blocks, remove-blocks, duplicate-blocks,
-replace-block, create-page, create-entity, create-post, set-page-status, create-query, create-query-card,
+Negentien daarvan zijn alleen-lezen. Eenentwintig schrijven: set-attributes,
+style-blocks, set-text, insert-blocks, remove-blocks, move-blocks, duplicate-blocks,
+replace-block, create-page, create-entity, create-post, update-post, set-page-status, create-query, create-query-card,
 set-query, sync-query-facets, set-card-layout, set-entity-meta,
-set-global-typography en set-site-css. Ze vragen alle negentien een eigen capability (kadence_mcp_write, die na installatie aan
+set-global-typography en set-site-css. Ze vragen alle eenentwintig een eigen capability (kadence_mcp_write, die na installatie aan
 niemand is toegekend), bewerkrecht op de post volgens WordPress, en een token
 uit een voorafgaande controlestap. Na elke schrijfactie wordt de post
 teruggelezen en vergeleken met wat er bedoeld was.
@@ -38,6 +38,14 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.25.0 =
+* Nieuw: kadence/update-post. De tegenhanger van create-post voor een bestaande post: titel, slug, samenvatting, volgorde, uitgelichte afbeelding, termen (per genoemde taxonomie vervangen) en ACF-velden (op veldsleutel), met dezelfde toetsen tegen het posttype. Het voorstel geeft before en after per onderdeel; ACF-velden, termen en de afbeelding kennen geen revisies. Nodig om de inhoud van diensten en markten naar een andere omgeving te zetten: create-post kon alleen aanmaken.
+* Nieuw: kadence/move-blocks. Verplaatst blokken binnen een post (voor, na, of als eerste of laatste kind) met behoud van hun uniqueID, zodat de CSS per blok en verwijzingen blijven werken. Weigert als het doel in een verplaatst blok ligt, als een Sectie uit, in of tussen Row Layouts gaat (kolomaantal; binnen de eigen rij van plek wisselen mag), als een slide of tab naar een andere ouder gaat (slideCount, tabtitels), en als de parent-regel van het blok het niet toelaat (ook voor kadence/slide, pane en repeatertemplate, die dat niet in hun registratie zeggen). Controleert voor het schrijven dat er geen blok verdwijnt.
+* Gecorrigeerd: set-text op een kadence/listitem verving de hele inhoud van de <li>, waardoor link en icoon verdwenen. Nu wordt alleen de tekst in .kt-svg-icon-list-text vervangen; ontbreekt die span (al platgeslagen markup), dan weigert hij met een verwijzing naar replace-block.
+* Gecorrigeerd: set-entity-meta, set-card-layout en set-query meldden een afwijking bij het teruglezen als een getal als tekst terugkwam (240 tegenover "240", true tegenover "1"): zo slaat WordPress scalaire post meta op. De vergelijking behandelt die nu als gelijk.
+* replace-block weigert niet meer op een Sectie met een achtergrondkleur: background zet geen klasse in de markup (afgelezen over 88 Secties). Wel geweigerd: een kadence/single-icon met link, want het profiel kent de <a> om de span niet en herbouwen zou de link stil weghalen.
+* Profiel Dynamic HTML: h1Typography t/m h6Typography renderen alleen met enableH1 t/m enableH6; textTypography en textColor gelden ook voor elke <p> in het blok.
 
 = 1.24.0 =
 * Nieuw: kadence/create-post. Maakt een post van elk publiek posttype dat in de REST-API staat — een bericht of een eigen posttype zoals een dienst of markt — met titel, slug, samenvatting, volgorde, uitgelichte afbeelding, termen, ACF-velden en optioneel blokmarkup. Eén ability voor alle posttypes: wat per type verschilt wordt per aanroep uit WordPress gelezen en getoetst. Een samenvatting of afbeelding op een type dat die niet ondersteunt, een taxonomie die niet aan het type hangt, een term die niet bestaat, een ACF-veld buiten de veldgroepen van het type, een onbekend subveld in een repeater of een relatie naar een post van een niet-toegestaan type wordt geweigerd, met de namen die wél kunnen. ACF-velden worden op veldsleutel opgeslagen, zodat ACF ze op een nieuwe post herkent. Pagina's, bijlagen en de posttypes van Kadence blijven bij hun eigen ability. Standaard een concept; twee stappen met token; na afloop teruggelezen.

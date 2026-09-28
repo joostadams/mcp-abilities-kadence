@@ -295,7 +295,7 @@ class Kadence_MCP_Abilities_Content {
 				'args' => array(
 					'label'       => __( 'De tekst van een blok schrijven', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'SCHRIJFACTIE. Vervangt de tekst binnen één tekstblok.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Vervangt de tekst van één blok. Nodig omdat de tekst van een kop of alinea niet in de attributen staat maar in de innerHTML: set-attributes weigert die terecht, want daar worden ook de klassen en data-attributen uit opgebouwd. Deze ability raakt uitsluitend het deel tussen de buitenste tag aan en laat die tag letterlijk staan, zodat de blokvalidatie van Gutenberg blijft kloppen. Werkt in twee stappen en niet in drie: roep hem eerst zonder token aan en je krijgt de oude tekst, de nieuwe en een token terug zonder dat er iets is opgeslagen; roep hem daarna opnieuw aan met dat token en hij schrijft. Een aparte validate-stap zou hier niets toevoegen, want er is geen schema om een tekst tegen te toetsen. Weigert bij een blok met kindblokken, bij een innerHTML die niet precies één omhullend element is, en bij een lege tekst. HTML in de tekst wordt door wp_kses teruggebracht tot opmaaktags als strong, em, a, br, span en mark; wat eruit gaat staat in notes. Vereist de capability kadence_mcp_write. Er wordt een revisie gemaakt.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Vervangt de tekst van één blok. Nodig omdat de tekst van een kop of alinea niet in de attributen staat maar in de innerHTML: set-attributes weigert die terecht, want daar worden ook de klassen en data-attributen uit opgebouwd. Deze ability raakt uitsluitend het deel tussen de buitenste tag aan en laat die tag letterlijk staan, zodat de blokvalidatie van Gutenberg blijft kloppen. Werkt in twee stappen en niet in drie: roep hem eerst zonder token aan en je krijgt de oude tekst, de nieuwe en een token terug zonder dat er iets is opgeslagen; roep hem daarna opnieuw aan met dat token en hij schrijft. Een aparte validate-stap zou hier niets toevoegen, want er is geen schema om een tekst tegen te toetsen. Weigert bij een blok met kindblokken, bij een innerHTML die niet precies één omhullend element is, en bij een lege tekst. Bij een kadence/listitem wordt alleen de tekst in .kt-svg-icon-list-text vervangen; link en icoon blijven staan. HTML in de tekst wordt door wp_kses teruggebracht tot opmaaktags als strong, em, a, br, span en mark; wat eruit gaat staat in notes. Vereist de capability kadence_mcp_write. Er wordt een revisie gemaakt.', 'mcp-abilities-kadence' ),
 					'readonly'    => false,
 					'destructive' => true,
 					'idempotent'  => false,
@@ -1994,6 +1994,44 @@ class Kadence_MCP_Abilities_Content {
 	}
 
 	/**
+	 * Verfijnt het omhulsel van een kadence/listitem tot de tekstspan.
+	 *
+	 * De innerHTML van een lijstitem is een <li> met daarin, met of zonder
+	 * link eromheen, het icoon en de tekst:
+	 *
+	 *     <li class="…"><a href="…" class="kt-svg-icon-link"><span class="kadence-dynamic-icon" …></span><span class="kt-svg-icon-list-text">Tekst</span></a></li>
+	 *
+	 * splits_omhulsel() levert alles tussen de <li> als inhoud, en die hele
+	 * inhoud vervangen haalt link en icoon weg. Hier wordt het omhulsel
+	 * uitgebreid tot en met de openingstag van .kt-svg-icon-list-text, zodat
+	 * alleen de tekst zelf de inhoud is. De tekstspan staat altijd als laatste,
+	 * eventueel gevolgd door de sluitende </a>.
+	 *
+	 * Weigert als er geen tekstspan is: dan is de markup al eerder platgeslagen
+	 * (bijvoorbeeld door een oude versie van set-text) en valt er niets veilig
+	 * te vervangen. Herbouw het item dan met replace-block.
+	 *
+	 * @param array $delen Uitkomst van splits_omhulsel().
+	 *
+	 * @return array|WP_Error Zelfde vorm, of een fout.
+	 */
+	private static function splits_lijsttekst( $delen ) {
+		if ( ! preg_match( '#^(.*?<span\b[^>]*\bkt-svg-icon-list-text\b[^>]*>)(.*)(</span>\s*(?:</a>\s*)?)$#s', $delen['inhoud'], $m ) ) {
+			return new WP_Error(
+				'kadence_mcp_text_listitem_flat',
+				__( 'Dit lijstitem heeft geen tekstspan (kt-svg-icon-list-text): de link en het icoon ontbreken in de opgeslagen markup. Er valt niets veilig te vervangen. Herbouw het item met replace-block (icoon, link en tekst), of zet de markup terug naar de vorm van een ander item in dezelfde lijst.', 'mcp-abilities-kadence' )
+			);
+		}
+
+		return array(
+			'open'   => $delen['open'] . $m[1],
+			'inhoud' => $m[2],
+			'sluit'  => $m[3] . $delen['sluit'],
+			'tag'    => 'span',
+		);
+	}
+
+	/**
 	 * Vervang de innerHTML van één blok in de boom.
 	 *
 	 * @param array  $blokken   De blokken.
@@ -2227,6 +2265,17 @@ class Kadence_MCP_Abilities_Content {
 
 		if ( is_wp_error( $delen ) ) {
 			return $delen;
+		}
+
+		// Een lijstitem is geen kaal tekstblok: tussen de buitenste <li> staan
+		// de link, het icoon en pas daarbinnen de tekst. Alleen die tekst hoort
+		// vervangen te worden, anders verdwijnen link en icoon (gebeurd, 28-09).
+		if ( isset( $blok['blockName'] ) && 'kadence/listitem' === $blok['blockName'] ) {
+			$delen = self::splits_lijsttekst( $delen );
+
+			if ( is_wp_error( $delen ) ) {
+				return $delen;
+			}
 		}
 
 		$schoon = Kadence_MCP_Inventory::schoon_tekst( $tekst );
