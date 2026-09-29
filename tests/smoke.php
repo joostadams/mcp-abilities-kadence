@@ -40,6 +40,7 @@ if ( ! $pagina ) {
 $uids   = $pagina ? array_keys( Kadence_MCP_Inventory::verzamel_unique_ids( parse_blocks( (string) get_post_field( 'post_content', $pagina ) ) ) ) : array();
 $uid    = $uids ? (string) $uids[0] : '';
 $query  = get_posts( array( 'post_type' => 'kadence_query', 'numberposts' => 1, 'fields' => 'ids' ) );
+$object = get_posts( array( 'post_type' => array( 'kadence_element', 'kadence_navigation', 'kadence_header' ), 'numberposts' => 1, 'fields' => 'ids' ) );
 $recept = '';
 
 foreach ( Kadence_MCP_Registry::get_definitions() as $d ) {
@@ -48,7 +49,7 @@ foreach ( Kadence_MCP_Registry::get_definitions() as $d ) {
 
 		if ( is_array( $lijst ) && ! empty( $lijst['recipes'] ) ) {
 			$eerste = reset( $lijst['recipes'] );
-			$recept = is_array( $eerste ) && isset( $eerste['name'] ) ? (string) $eerste['name'] : (string) key( $lijst['recipes'] );
+			$recept = is_array( $eerste ) && isset( $eerste['slug'] ) ? (string) $eerste['slug'] : '';
 		}
 	}
 }
@@ -91,6 +92,16 @@ foreach ( Kadence_MCP_Registry::get_definitions() as $d ) {
 
 	if ( 'kadence/describe-query' === $d['name'] ) {
 		$invoer['post_id'] = $query ? (int) $query[0] : $pagina;
+	}
+
+	if ( 'kadence/export-entity' === $d['name'] ) {
+		$invoer['post_id'] = $object ? (int) $object[0] : $pagina;
+	}
+
+	// Een toets op een waarde die er al staat: verandert niets, raakt wel de
+	// hele validatieketen.
+	if ( in_array( $d['name'], array( 'kadence/validate-write', 'kadence/preview-write' ), true ) ) {
+		$invoer['attributes'] = array( 'uniqueID' => $uid );
 	}
 
 	$start = microtime( true );
