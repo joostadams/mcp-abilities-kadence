@@ -604,7 +604,7 @@ class Kadence_MCP_Abilities_Query {
 		}
 
 		foreach ( $voorstel as $sleutel => $waarde ) {
-			update_post_meta( $post->ID, $sleutel, $waarde );
+			Kadence_MCP_Inventory::schrijf_meta( $post->ID, $sleutel, $waarde );
 		}
 
 		clean_post_cache( $post->ID );
@@ -1102,7 +1102,7 @@ class Kadence_MCP_Abilities_Query {
 			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $grondslag, $post ) );
 		}
 
-		update_post_meta( $post->ID, '_kad_query_query', $na );
+		Kadence_MCP_Inventory::schrijf_meta( $post->ID, '_kad_query_query', $na );
 
 		$terug = Kadence_MCP_Query::instellingen( $post->ID );
 		$klopt = Kadence_MCP_Inventory::meta_gelijk( $terug, $na );
@@ -1229,6 +1229,12 @@ class Kadence_MCP_Abilities_Query {
 			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $grondslag, $bron ) );
 		}
 
+		$al_gebruikt = Kadence_MCP_Inventory::token_al_gebruikt( $token );
+
+		if ( is_wp_error( $al_gebruikt ) ) {
+			return $al_gebruikt;
+		}
+
 		// Eerst leeg aanmaken, want de nieuwe uniqueIDs worden geprefixt met
 		// het post-ID en dat bestaat pas na het invoegen.
 		$nieuw_id = wp_insert_post(
@@ -1244,6 +1250,8 @@ class Kadence_MCP_Abilities_Query {
 		if ( is_wp_error( $nieuw_id ) ) {
 			return $nieuw_id;
 		}
+
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
 
 		$boom  = Kadence_MCP_Inventory::schoon_blokken( parse_blocks( $bron->post_content ) );
 		$oude  = Kadence_MCP_Inventory::verzamel_unique_ids( $boom );
@@ -1299,10 +1307,10 @@ class Kadence_MCP_Abilities_Query {
 				continue;
 			}
 
-			update_post_meta( $nieuw_id, $sleutel, maybe_unserialize( $waarden[0] ) );
+			Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, $sleutel, maybe_unserialize( $waarden[0] ) );
 		}
 
-		update_post_meta( $nieuw_id, '_kad_query_query', $instellingen );
+		Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, '_kad_query_query', $instellingen );
 
 		$facetten = Kadence_MCP_Query::schrijf_facetten( $nieuw_id );
 		$stand    = is_wp_error( $facetten ) ? array( 'computed' => array(), 'in_sync' => false ) : $facetten;
@@ -1444,11 +1452,19 @@ class Kadence_MCP_Abilities_Query {
 			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $grondslag, $card ) );
 		}
 
+		$al_gebruikt = Kadence_MCP_Inventory::token_al_gebruikt( $token );
+
+		if ( is_wp_error( $al_gebruikt ) ) {
+			return $al_gebruikt;
+		}
+
 		$nieuw_id = wp_insert_post( array( 'post_type' => 'kadence_query', 'post_status' => 'publish', 'post_title' => $titel, 'post_content' => '' ), true );
 
 		if ( is_wp_error( $nieuw_id ) ) {
 			return $nieuw_id;
 		}
+
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
 
 		$boom  = parse_blocks( $sjabloon );
 		$kaart = array();
@@ -1468,11 +1484,11 @@ class Kadence_MCP_Abilities_Query {
 		// standaard, zodat set-query en set-entity-meta ze later herkennen.
 		foreach ( $registratie as $sleutel => $args ) {
 			if ( 0 === strpos( (string) $sleutel, '_kad_query_' ) && array_key_exists( 'default', $args ) && '_kad_query_facets' !== $sleutel ) {
-				update_post_meta( $nieuw_id, $sleutel, $args['default'] );
+				Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, $sleutel, $args['default'] );
 			}
 		}
 
-		update_post_meta( $nieuw_id, '_kad_query_query', $instellingen );
+		Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, '_kad_query_query', $instellingen );
 
 		$facetten = Kadence_MCP_Query::schrijf_facetten( $nieuw_id );
 		clean_post_cache( $nieuw_id );
@@ -1780,6 +1796,12 @@ class Kadence_MCP_Abilities_Query {
 			return new WP_Error( 'kadence_mcp_invalid_token', Kadence_MCP_Inventory::token_reden( $token, $grondslag, $bron ) );
 		}
 
+		$al_gebruikt = Kadence_MCP_Inventory::token_al_gebruikt( $token );
+
+		if ( is_wp_error( $al_gebruikt ) ) {
+			return $al_gebruikt;
+		}
+
 		$nieuw_id = wp_insert_post(
 			array(
 				'post_type'    => 'kadence_query_card',
@@ -1793,6 +1815,8 @@ class Kadence_MCP_Abilities_Query {
 		if ( is_wp_error( $nieuw_id ) ) {
 			return $nieuw_id;
 		}
+
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
 
 		$boom  = Kadence_MCP_Inventory::schoon_blokken( parse_blocks( $bron->post_content ) );
 		$kaart = array();
@@ -1835,15 +1859,15 @@ class Kadence_MCP_Abilities_Query {
 				continue;
 			}
 
-			update_post_meta( $nieuw_id, $sleutel, maybe_unserialize( $waarden[0] ) );
+			Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, $sleutel, maybe_unserialize( $waarden[0] ) );
 		}
 
 		// De kaart weet zelf voor welk posttype hij een voorbeeld toont. Staat
 		// dat verkeerd, dan toont de editor een voorbeeld van het verkeerde
 		// soort post en lijkt elk dynamisch veld leeg.
 		if ( '' !== $post_type ) {
-			update_post_meta( $nieuw_id, '_kad_query_card_postType', $post_type );
-			update_post_meta( $nieuw_id, '_kad_query_card_preview_post_type', $post_type );
+			Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, '_kad_query_card_postType', $post_type );
+			Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, '_kad_query_card_preview_post_type', $post_type );
 		}
 
 		clean_post_cache( $nieuw_id );
@@ -2198,7 +2222,7 @@ class Kadence_MCP_Abilities_Query {
 		}
 
 		foreach ( $schoon as $sleutel => $waarde ) {
-			update_post_meta( $post->ID, self::KAART_SLEUTELS[ $sleutel ], $waarde );
+			Kadence_MCP_Inventory::schrijf_meta( $post->ID, self::KAART_SLEUTELS[ $sleutel ], $waarde );
 		}
 
 		clean_post_cache( $post->ID );

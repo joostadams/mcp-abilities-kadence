@@ -1105,9 +1105,10 @@ class Kadence_MCP_Abilities_Site {
 		}
 
 		return array(
-			'usages'  => $gevonden,
-			'scanned' => $gescand,
-			'status'  => $status,
+			'usages'    => $gevonden,
+			'scanned'   => $gescand,
+			'truncated' => $begrensd,
+			'status'    => $status,
 		);
 	}
 
@@ -2108,7 +2109,7 @@ class Kadence_MCP_Abilities_Site {
 				continue;
 			}
 
-			update_post_meta( $m['post_id'], $m['key'], $m['value'] );
+			Kadence_MCP_Inventory::schrijf_meta( $m['post_id'], $m['key'], $m['value'] );
 
 			if ( ! Kadence_MCP_Inventory::meta_gelijk( get_post_meta( $m['post_id'], $m['key'], true ), $m['value'] ) ) {
 				$fouten[] = sprintf( __( 'meta %1$d %2$s: na het opslaan wijkt de waarde af', 'mcp-abilities-kadence' ), $m['post_id'], $m['key'] );
@@ -2491,6 +2492,31 @@ class Kadence_MCP_Abilities_Site {
 		// uit — anders verschilt alles, altijd.
 		$entiteiten = array();
 		$domein     = wp_parse_url( home_url(), PHP_URL_HOST );
+		$site       = untrailingslashit( home_url() );
+
+		// Eerst de hele site-URL (schema en poort erbij), ook in de vorm die
+		// JSON en blokattributen gebruiken; dan pas het kale domein. Tot 1.26.1
+		// werd alleen het domein vervangen, en bleven http://…:10004 en https://…
+		// verschillen: lokaal en staging waren dan nooit gelijk.
+		$schoon = static function ( $tekst, $uids = array() ) use ( $domein, $site ) {
+			$tekst = str_replace(
+				array( $site, str_replace( '/', '\\/', $site ), (string) $domein ),
+				array( '{site}', '{site}', '{domein}' ),
+				(string) $tekst
+			);
+			$tekst = preg_replace( '/"(id|postId|ID|mediaId|bgImgID|imgID|parent)":\d+/', '"$1":0', $tekst );
+			$tekst = preg_replace( '/"ids":\[[\d,\s"]*\]/', '"ids":[]', $tekst );
+
+			// Het uniqueID staat ook in klassenamen (kadence-column6_4ec348-d0):
+			// het postnummervoorvoegsel eraf, overal waar het voorkomt.
+			foreach ( $uids as $uid ) {
+				if ( preg_match( '/^\d+_(.+)$/', (string) $uid, $m ) ) {
+					$tekst = str_replace( (string) $uid, '_' . $m[1], $tekst );
+				}
+			}
+
+			return preg_replace( '/"uniqueID":"\d+_/', '"uniqueID":"_', $tekst );
+		};
 
 		foreach ( array_keys( Kadence_MCP_Inventory::get_post_types() ) as $type ) {
 			foreach ( get_posts( array( 'post_type' => $type, 'post_status' => array( 'publish', 'private', 'draft' ), 'numberposts' => 300, 'suppress_filters' => true ) ) as $post ) {
@@ -2502,25 +2528,28 @@ class Kadence_MCP_Abilities_Site {
 
 				foreach ( get_post_meta( $post->ID ) as $sleutel => $waarden ) {
 					if ( 0 === strpos( $sleutel, '_kad_' ) && 0 !== strpos( $sleutel, '_kad_font_' ) ) {
-						$meta[ $sleutel ] = $waarden[0];
+						// Uitgepakt: in een geserialiseerde waarde staat de
+						// lengte van elke string, en die verschilt per domein.
+						$meta[ $sleutel ] = maybe_unserialize( $waarden[0] );
 					}
 				}
 
 				ksort( $meta );
 
-				$schoon = static function ( $tekst ) use ( $domein ) {
-					$tekst = str_replace( (string) $domein, '{domein}', (string) $tekst );
-					$tekst = preg_replace( '/"(id|postId|ID|mediaId|bgImgID|imgID|parent)":\d+/', '"$1":0', $tekst );
-
-					return preg_replace( '/"uniqueID":"\d+_/', '"uniqueID":"_', $tekst );
-				};
+				$uids = array_keys( Kadence_MCP_Inventory::verzamel_unique_ids( parse_blocks( $post->post_content ) ) );
+				usort(
+					$uids,
+					static function ( $a, $b ) {
+						return strlen( $b ) - strlen( $a );
+					}
+				);
 
 				$sleutel = $post->post_title . ( '' !== $post->post_name ? ' (' . $post->post_name . ')' : '' );
 
 				$entiteiten[ $type ][ $sleutel ] = array(
 					'status'       => $post->post_status,
-					'content_hash' => md5( $schoon( $post->post_content ) ),
-					'meta_hash'    => md5( $schoon( wp_json_encode( $meta ) ) ),
+					'content_hash' => md5( $schoon( $post->post_content, $uids ) ),
+					'meta_hash'    => md5( $schoon( wp_json_encode( $meta ), $uids ) ),
 				);
 			}
 		}
@@ -2532,15 +2561,22 @@ class Kadence_MCP_Abilities_Site {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
 
+		// Welke plugins er draaien, en welke versie, is informatie voor wie ze
+		// mag beheren: WordPress toont die lijst ook alleen aan activate_plugins.
 		$plugins = array();
 
-		foreach ( get_plugins() as $bestand => $data ) {
-			if ( is_plugin_active( $bestand ) ) {
-				$plugins[ dirname( $bestand ) ] = $data['Version'];
+		if ( current_user_can( 'activate_plugins' ) ) {
+			foreach ( get_plugins() as $bestand => $data ) {
+				if ( is_plugin_active( $bestand ) ) {
+					$plugins[ dirname( $bestand ) ] = $data['Version'];
+				}
 			}
+
+			ksort( $plugins );
+		} else {
+			$plugins = array( '_hidden' => 'activate_plugins' );
 		}
 
-		ksort( $plugins );
 		$delen['plugins'] = $plugins;
 
 		$delen['reading'] = array(

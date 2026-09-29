@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.26.0
+Stable tag: 1.26.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,6 +39,17 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.26.1 =
+Fixes uit de review van 2026-09-28. Pas met deze versie de vier nieuwe schrijf-abilities aanzetten.
+* trash-post: riskant, zonder token en ook niet weg te zetten met ignore_usages, voor een actief element op een hook (zoals de footer op replace_footer), de voorpagina, de berichtenpagina, de privacypagina en een scan die faalde of begrensd was (objections). Tot nu toe kreeg de actieve footer "veilig". find-usages meldt truncated.
+* Post meta wordt overal geslasht geschreven (Kadence_MCP_Inventory::schrijf_meta). Op dertien plekken ging dat zonder wp_slash, waardoor backslashes stil verdwenen, ook bij het kopiëren van een query of card.
+* import-entity: alleen meta-sleutels met het prefix _kad_; status en slug zitten in het token; publiceren toetst publish_posts; een bestaand object met dezelfde titel geeft riskant (gebruik target_id). meta_ids_to_check noemt per sleutel de ID's, ook uit "ids":[…] (de paginavoorwaarden van een element).
+* Aanmaaktokens (create-page, create-post, create-entity, create-query, create-query-card) werken één keer: dezelfde aanroep twee keer gaf twee objecten. Een token dat al een object opleverde geeft kadence_mcp_token_used, tenzij dat object in de prullenbak staat.
+* get-raw-markup knipt op een tekengrens (mb_strcut); offset en next_offset tellen bytes.
+* site-fingerprint vergelijkt lokaal en staging nu echt: de hele site-URL (schema en poort) en de uniqueID's in klassenamen worden genormaliseerd, meta wordt uitgepakt voor de hash. De pluginlijst alleen met activate_plugins.
+* Skill en serverinstructie: alleen style-blocks en set-text accepteren expect_modified.
+* tests/smoke.php (wp eval-file) roept elke lees-ability aan; CI lint op PHP 7.4 en 8.3; de release controleert naast de header ook KADENCE_MCP_VERSION en Stable tag.
 
 = 1.26.0 =
 * Nieuw: kadence/check-access. Wat dit account per posttype mag lezen, bewerken, aanmaken en publiceren, en of edit_theme_options en unfiltered_html ontbreken — vooraf, in plaats van achteraf aan een stille fout te merken. list-entities telt nu ook posts die er wel zijn maar niet leesbaar (unreadable).

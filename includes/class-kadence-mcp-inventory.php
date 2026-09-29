@@ -1524,6 +1524,94 @@ class Kadence_MCP_Inventory {
 	}
 
 	/**
+	 * Post meta schrijven zoals WordPress het verwacht: geslasht.
+	 *
+	 * update_post_meta() haalt er een laag backslashes af (wp_unslash), dus
+	 * een waarde die je ongeslasht meegeeft verliest ze: \u002d in een
+	 * Kadence-instelling werd u002d, en een query of card kopiëren brak zo stil
+	 * var(--…) en klassen. Tot 1.26.1 gebeurde dat op tien plekken.
+	 *
+	 * @param int    $post_id De post.
+	 * @param string $sleutel De meta-sleutel.
+	 * @param mixed  $waarde  De waarde, ongeslasht (zoals get_post_meta hem geeft).
+	 *
+	 * @return int|bool Wat update_post_meta() teruggeeft.
+	 */
+	public static function schrijf_meta( $post_id, $sleutel, $waarde ) {
+		return update_post_meta( $post_id, $sleutel, wp_slash( $waarde ) );
+	}
+
+	/**
+	 * Het nieuwste object van dit type met precies deze titel, buiten de prullenbak.
+	 *
+	 * @param string $type  Het posttype.
+	 * @param string $titel De titel.
+	 *
+	 * @return WP_Post|null
+	 */
+	public static function bestaand_object( $type, $titel ) {
+		if ( '' === trim( (string) $titel ) ) {
+			return null;
+		}
+
+		$ids = get_posts(
+			array(
+				'post_type'        => $type,
+				'post_status'      => array( 'publish', 'draft', 'pending', 'private', 'future' ),
+				'title'            => (string) $titel,
+				'numberposts'      => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+			)
+		);
+
+		return empty( $ids ) ? null : get_post( (int) $ids[0] );
+	}
+
+	/**
+	 * Een aanmaaktoken werkt één keer.
+	 *
+	 * Het token hangt aan de invoer, en bij aanmaken verandert er aan die
+	 * invoer niets: tot 1.26.1 gaf dezelfde aanroep twee keer dus twee
+	 * objecten. Nu onthoudt de site een dag lang welk object een token
+	 * opleverde. Staat dat object in de prullenbak (of is het weg), dan mag het
+	 * token opnieuw: dan is opnieuw aanmaken juist de bedoeling.
+	 *
+	 * @param string $token Het token.
+	 *
+	 * @return WP_Error|null
+	 */
+	public static function token_al_gebruikt( $token ) {
+		$id = (int) get_transient( 'kmcp_aangemaakt_' . md5( (string) $token ) );
+
+		if ( $id > 0 && get_post( $id ) && 'trash' !== get_post_status( $id ) ) {
+			return new WP_Error(
+				'kadence_mcp_token_used',
+				sprintf(
+					/* translators: %d: post ID. */
+					__( 'Dit token heeft al object %d aangemaakt; er is niets gedaan. Een tweede exemplaar? Vraag dan een nieuw voorstel met een andere titel.', 'mcp-abilities-kadence' ),
+					$id
+				),
+				array( 'status' => 409, 'existing_id' => $id )
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Onthoud welk object een aanmaaktoken opleverde (zie token_al_gebruikt).
+	 *
+	 * @param string $token Het token.
+	 * @param int    $id    Het nieuwe post-ID.
+	 */
+	public static function onthoud_token( $token, $id ) {
+		set_transient( 'kmcp_aangemaakt_' . md5( (string) $token ), (int) $id, DAY_IN_SECONDS );
+	}
+
+	/**
 	 * Het token dat een goedgekeurde toetsing bewijst.
 	 *
 	 * Zonder dit is `validate-write` een aansporing en geen poort: een agent kan

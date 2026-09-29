@@ -1165,7 +1165,11 @@ een verschil als fout ziet.
    `export-entity` draagt inhoud én `_kad`-meta (schaduwen, kleuren, plaatsing)
    en noemt de posts en media waarnaar verwezen wordt; geef hun ID op de
    doelsite mee als `post_map` en `media_map`, en het domein als `replace`.
-   ID's ín de meta worden niet omgezet: die staan in `meta_ids_to_check`.
+   ID's ín de meta worden niet omgezet: `meta_ids_to_check` noemt ze per sleutel
+   (`{key, ids}`), ook de pagina's in de weergavevoorwaarden van een element.
+   Alleen `_kad_`-sleutels gaan mee. Bestaat er op de doelsite al een object met
+   die titel, dan is het voorstel `riskant`: geef dan `target_id` om dat object
+   te overschrijven.
 3. **Het tegenstuk vinden:** de uniqueID's blijven bij een overzetting gelijk,
    de post-ID's niet. `find-post` met `unique_id` vindt de post op de andere site
    zonder ID-kaart.
@@ -1181,7 +1185,14 @@ een verschil als fout ziet.
 6. **Opruimen:** dubbel aangemaakte objecten met `trash-post`. Die zoekt eerst
    waar het object nog gebruikt wordt (op id, en bij een custom SVG op
    `kb-custom-{ID}`) en geeft dan geen token; een verwijzing naar een post in de
-   prullenbak laat het blok stil verdwijnen.
+   prullenbak laat het blok stil verdwijnen. Altijd `riskant`, ook met
+   `ignore_usages`: een actief element op een hook (de footer!), de voor-,
+   berichten- en privacypagina, en een scan die faalde of begrensd was — zie
+   `objections`. Dat hoort in het beheer, met een mens erbij.
+
+Een aanmaaktoken werkt één keer. Dezelfde aanroep nog eens geeft
+`kadence_mcp_token_used` met het ID dat al bestaat, in plaats van een tweede
+object — tenzij dat eerste in de prullenbak staat.
 
 ## Kleuren over de hele site
 
@@ -1279,11 +1290,15 @@ in één keer met `set-entity-meta` en `items`.
 - `find-usages` telt `id` op `kadence/tab`, `kadence/slide` en `kadence/pane`
   niet meer mee: daar is het een volgnummer, geen verwijzing.
 - `get-raw-markup` leest lange posts in stukken: `truncated`, `offset` en
-  `next_offset`.
+  `next_offset`. Die tellen bytes, niet tekens, en vallen altijd op een
+  tekengrens.
 
 ## Grenzen
 
-- Vijfentwintig abilities schrijven, alle met token of `expect_modified`. De
+- Vijfentwintig abilities schrijven, alle met een token. Alleen `style-blocks` en
+  `set-text` accepteren in plaats daarvan `expect_modified` (de `post_modified_gmt`
+  die je al kent): één aanroep in plaats van twee, dus gebruik het zodra je de
+  post net gelezen hebt. De
   overige drieëntwintig zijn alleen-lezen. Ga niet af op de naam: `generate-section`,
   `prepare-import` en `preview-write` klinken als schrijvers maar slaan niets
   op, terwijl

@@ -128,7 +128,7 @@ class Kadence_MCP_Abilities_Content {
 								'type'        => 'integer',
 								'minimum'     => 0,
 								'default'     => 0,
-								'description' => __( 'Begin bij dit teken. Bij een lange post: lees in stukken met next_offset uit het vorige antwoord.', 'mcp-abilities-kadence' ),
+								'description' => __( 'Begin bij deze byte (niet: dit teken). Bij een lange post: lees in stukken met next_offset uit het vorige antwoord; die valt altijd op een tekengrens.', 'mcp-abilities-kadence' ),
 							),
 							'max_chars' => array(
 								'type'    => 'integer',
@@ -759,13 +759,21 @@ class Kadence_MCP_Abilities_Content {
 				'kadence_mcp_offset_past_end',
 				sprintf(
 					/* translators: 1: offset, 2: length. */
-					__( 'offset %1$d ligt voorbij het einde; de markup is %2$d tekens.', 'mcp-abilities-kadence' ),
+					__( 'offset %1$d ligt voorbij het einde; de markup is %2$d bytes.', 'mcp-abilities-kadence' ),
 					$vanaf,
 					$lengte
 				)
 			);
 		}
-		$stuk     = (string) substr( $markup, $vanaf, $max );
+		// Op een tekengrens knippen: substr() deelde een UTF-8-teken en dan
+		// eindigde het ene stuk en begon het volgende met een kapot teken. offset
+		// en next_offset tellen bytes, niet tekens.
+		$stuk = function_exists( 'mb_strcut' ) ? (string) mb_strcut( $markup, $vanaf, $max, 'UTF-8' ) : '';
+
+		if ( '' === $stuk ) {
+			$stuk = (string) substr( $markup, $vanaf, $max );
+		}
+
 		$volgende = $vanaf + strlen( $stuk );
 		// Tot 1.26.0 stond de afkapping alleen in status. Een scan die de
 		// statusregel niet las, miste zo de tweede helft van een footer.
@@ -785,7 +793,7 @@ class Kadence_MCP_Abilities_Content {
 			'status'      => $afgekapt
 				? sprintf(
 					/* translators: 1: source, 2: from, 3: to, 4: total chars. */
-					__( '%1$s, DEEL: tekens %2$d tot %3$d van %4$d. Lees verder met offset = next_offset tot die null is, of vraag één blok op met unique_id.', 'mcp-abilities-kadence' ),
+					__( '%1$s, DEEL: bytes %2$d tot %3$d van %4$d. Lees verder met offset = next_offset tot die null is, of vraag één blok op met unique_id.', 'mcp-abilities-kadence' ),
 					$bron,
 					$vanaf,
 					$volgende,

@@ -33,11 +33,32 @@ jobs:
           fi
           echo "Versie ${header} komt overeen met ${GITHUB_REF_NAME}."
 
+      # De versie staat op nog twee plekken. KADENCE_MCP_VERSION gaat mee in de
+      # cache-busting en in check-access; Stable tag leest WordPress in het
+      # detailvenster van de update. Liepen die uit elkaar, dan zei de site iets
+      # anders dan de header.
+      - name: Constante en Stable tag moeten ook overeenkomen
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          constante="$(grep -m1 -E "define\( *'KADENCE_MCP_VERSION'" mcp-abilities-kadence.php | sed -E "s/.*'KADENCE_MCP_VERSION', *'([^']+)'.*/\1/")"
+          stable="$(grep -m1 -E '^Stable tag:' readme.txt | sed -E 's/Stable tag:[[:space:]]*//' | tr -d '[:space:]')"
+          fout=0
+          [ "$constante" = "$tag" ] || { echo "::error::KADENCE_MCP_VERSION is ${constante}, de tag is ${GITHUB_REF_NAME}."; fout=1; }
+          [ "$stable" = "$tag" ] || { echo "::error::readme.txt heeft Stable tag: ${stable}, de tag is ${GITHUB_REF_NAME}."; fout=1; }
+          exit $fout
+
+      # Een syntaxfout gaat anders via de updateknop naar elke site.
+      - name: PHP-syntax controleren
+        run: |
+          find . -name '*.php' -not -path './vendor/*' -not -path './.git/*' -print0 \
+            | xargs -0 -n1 php -l
+
       # Uitsluiten in plaats van insluiten, verankerd met een / zodat een map
       # met dezelfde naam binnen vendor/ niet per ongeluk wordt weggeknipt.
       #
-      # CONTEXT.md is ontwikkeldocumentatie en hoort niet op een productiesite;
-      # in de repo blijft hij wel staan. skill/ gaat juist wél mee: de plugin
+      # CONTEXT.md is ontwikkeldocumentatie en tests/ een ontwikkelscript; geen
+      # van beide hoort op een productiesite; in de repo blijven ze wel staan.
+      # skill/ gaat juist wél mee: de plugin
       # serveert die map zelf als download onder Kadence Blocks -> MCP, en
       # zonder die bestanden meldt dat scherm dat de skillmap ontbreekt.
       - name: ZIP bouwen
@@ -49,7 +70,8 @@ jobs:
             --exclude '/dist' \
             --exclude '/.gitignore' \
             --exclude '/.gitattributes' \
-            --exclude '/CONTEXT.md'
+            --exclude '/CONTEXT.md' \
+            --exclude '/tests'
           cd dist && zip -qr mcp-abilities-kadence.zip mcp-abilities-kadence
           unzip -l mcp-abilities-kadence.zip | tail -5
 

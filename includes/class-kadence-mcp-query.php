@@ -356,7 +356,7 @@ class Kadence_MCP_Query {
 			return array_merge( $stand, array( 'written' => false ) );
 		}
 
-		update_post_meta( $stand['post_id'], '_kad_query_facets', $stand['computed'] );
+		Kadence_MCP_Inventory::schrijf_meta( $stand['post_id'], '_kad_query_facets', $stand['computed'] );
 
 		$na = self::facetstand( $stand['post_id'] );
 

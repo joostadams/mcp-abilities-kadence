@@ -8,3 +8,4 @@
 *.png binary
 
 /.github export-ignore
+/tests   export-ignore

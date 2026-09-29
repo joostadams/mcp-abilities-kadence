@@ -586,7 +586,7 @@ class Kadence_MCP_Abilities_Build {
 				'args' => array(
 					'label'       => __( 'Een post in de prullenbak zetten', 'mcp-abilities-kadence' ),
 					'summary'     => __( 'SCHRIJFACTIE. Zet een pagina, bericht of Kadence-object in de prullenbak, na een controle waar het nog gebruikt wordt.', 'mcp-abilities-kadence' ),
-					'description' => __( 'Zet één post in de prullenbak — nooit definitief verwijderen; dat blijft in het beheer, met een mens erbij. Vooraf wordt gezocht waar het object nog gebruikt wordt: op id-attribuut (zoals find-usages) en bij een custom SVG ook op de iconnaam kb-custom-{ID}. Is er gebruik, dan komt er geen token, want een verwijzing naar een post in de prullenbak laat het blok stil verdwijnen; geef ignore_usages: true als het toch de bedoeling is. Handig bij het opruimen van dubbel aangemaakte objecten. Twee stappen: eerst zonder token, daarna met token.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Zet één post in de prullenbak — nooit definitief verwijderen; dat blijft in het beheer, met een mens erbij. Vooraf wordt gezocht waar het object nog gebruikt wordt: op id-attribuut (zoals find-usages) en bij een custom SVG ook op de iconnaam kb-custom-{ID}. Is er gebruik, dan komt er geen token, want een verwijzing naar een post in de prullenbak laat het blok stil verdwijnen; geef ignore_usages: true als het toch de bedoeling is. Altijd riskant, ook met ignore_usages (zie objections): een actief element op een hook (zoals de footer), de voorpagina, de berichtenpagina, de privacypagina, en een scan die faalde of begrensd was. Handig bij het opruimen van dubbel aangemaakte objecten. Twee stappen: eerst zonder token, daarna met token.', 'mcp-abilities-kadence' ),
 					'readonly'    => false,
 					'destructive' => true,
 					'idempotent'  => false,
@@ -3626,6 +3626,12 @@ class Kadence_MCP_Abilities_Build {
 			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer. Roep opnieuw zonder token aan en gebruik het token dat je dan terugkrijgt.', 'mcp-abilities-kadence' ) );
 		}
 
+		$al_gebruikt = Kadence_MCP_Inventory::token_al_gebruikt( $token );
+
+		if ( is_wp_error( $al_gebruikt ) ) {
+			return $al_gebruikt;
+		}
+
 		$nieuw_id = wp_insert_post(
 			array(
 				'post_type'    => 'page',
@@ -3640,6 +3646,8 @@ class Kadence_MCP_Abilities_Build {
 		if ( is_wp_error( $nieuw_id ) ) {
 			return $nieuw_id;
 		}
+
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
 
 		clean_post_cache( $nieuw_id );
 
@@ -3842,6 +3850,12 @@ class Kadence_MCP_Abilities_Build {
 			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer. Roep opnieuw zonder token aan en gebruik het token dat je dan terugkrijgt.', 'mcp-abilities-kadence' ) );
 		}
 
+		$al_gebruikt = Kadence_MCP_Inventory::token_al_gebruikt( $token );
+
+		if ( is_wp_error( $al_gebruikt ) ) {
+			return $al_gebruikt;
+		}
+
 		if ( 'kadence_vector' === $type ) {
 			// Via de route van Kadence zelf: die saneert de SVG en maakt de post
 			// zoals de editor dat doet. Een eigen wp_insert_post zou de
@@ -3865,6 +3879,8 @@ class Kadence_MCP_Abilities_Build {
 			}
 
 			$nieuw_id = (int) $data['value'];
+
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
 
 			if ( '' !== $slug ) {
 				wp_update_post( array( 'ID' => $nieuw_id, 'post_name' => $slug ) );
@@ -3914,8 +3930,10 @@ class Kadence_MCP_Abilities_Build {
 			return $nieuw_id;
 		}
 
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
+
 		foreach ( array_merge( $standaard, $meta ) as $sleutel => $waarde ) {
-			update_post_meta( $nieuw_id, $sleutel, $waarde );
+			Kadence_MCP_Inventory::schrijf_meta( $nieuw_id, $sleutel, $waarde );
 		}
 
 		clean_post_cache( $nieuw_id );
@@ -4224,6 +4242,28 @@ class Kadence_MCP_Abilities_Build {
 		$gebruik = Kadence_MCP_Abilities_Site::find_usages( array( 'object_id' => $post->ID, 'scan_limit' => 1000 ) );
 		$treffers = is_wp_error( $gebruik ) ? array() : $gebruik['usages'];
 
+		// Wat de scan niet ziet maar wel stil breekt. Tot 1.26.1 kreeg de actieve
+		// footer (een element op replace_footer) hier "veilig": hij wordt door
+		// een hook geladen, niet via een id-attribuut. En een scan die faalde of
+		// begrensd was, gold als "niets gevonden".
+		$bezwaren = array();
+
+		if ( is_wp_error( $gebruik ) ) {
+			$bezwaren[] = sprintf( __( 'find-usages faalde (%s), dus het is onbekend waar dit object nog staat.', 'mcp-abilities-kadence' ), $gebruik->get_error_message() );
+		} elseif ( ! empty( $gebruik['truncated'] ) ) {
+			$bezwaren[] = sprintf( __( 'De scan is begrensd op %d posts en dekt de site mogelijk niet helemaal.', 'mcp-abilities-kadence' ), (int) $gebruik['scanned'] );
+		}
+
+		if ( 'kadence_element' === $post->post_type && 'publish' === $post->post_status && '' !== (string) get_post_meta( $post->ID, '_kad_element_hook', true ) ) {
+			$bezwaren[] = sprintf( __( 'Dit element is actief op de hook %s: het wordt door het thema geladen, niet via een blok, dus find-usages ziet het niet. Zet het eerst op concept en controleer de site.', 'mcp-abilities-kadence' ), (string) get_post_meta( $post->ID, '_kad_element_hook', true ) );
+		}
+
+		foreach ( array( 'page_on_front' => __( 'de voorpagina', 'mcp-abilities-kadence' ), 'page_for_posts' => __( 'de berichtenpagina', 'mcp-abilities-kadence' ), 'wp_page_for_privacy_policy' => __( 'de privacypagina', 'mcp-abilities-kadence' ) ) as $optie => $rol ) {
+			if ( (int) get_option( $optie ) === $post->ID ) {
+				$bezwaren[] = sprintf( __( 'Deze pagina is %s van de site (instelling %s).', 'mcp-abilities-kadence' ), $rol, $optie );
+			}
+		}
+
 		if ( 'kadence_custom_svg' === $post->post_type ) {
 			global $wpdb;
 
@@ -4237,6 +4277,21 @@ class Kadence_MCP_Abilities_Build {
 			'post'   => array( 'id' => $post->ID, 'title' => get_the_title( $post ), 'type' => $post->post_type, 'status' => $post->post_status ),
 			'usages' => $treffers,
 		);
+
+		// Deze bezwaren zijn niet weg te zetten met ignore_usages: daar hoort een
+		// mens in het beheer te beslissen.
+		if ( ! empty( $bezwaren ) ) {
+			return array_merge(
+				$rapport,
+				array(
+					'verdict'    => 'riskant',
+					'trashed'    => false,
+					'token'      => '',
+					'objections' => $bezwaren,
+					'status'     => __( 'Geen token: zie objections. Dit gaat niet via deze ability, ook niet met ignore_usages; doe het in het beheer als het echt de bedoeling is.', 'mcp-abilities-kadence' ),
+				)
+			);
+		}
 
 		if ( ! empty( $treffers ) && ! $negeer ) {
 			return array_merge(
@@ -4469,15 +4524,36 @@ class Kadence_MCP_Abilities_Build {
 		$ids_meta   = array();
 
 		foreach ( $meta as $sleutel => $waarde ) {
-			if ( ! empty( $bekend ) && ! in_array( $sleutel, $bekend, true ) && ! ( $doel && metadata_exists( 'post', $doel->ID, $sleutel ) ) ) {
+			// Altijd het prefix _kad_: export-entity levert niets anders, en zonder
+			// deze eis kwamen via een vector (geen geregistreerde sleutels) of via
+			// een sleutel die het doel toevallig al had, meta van andere plug-ins mee.
+			if ( 0 !== strpos( (string) $sleutel, '_kad_' ) || ( ! empty( $bekend ) && ! in_array( $sleutel, $bekend, true ) && ! ( $doel && metadata_exists( 'post', $doel->ID, $sleutel ) ) ) ) {
 				$onbekend[] = $sleutel;
+				continue;
 			}
 
 			$tekst = is_scalar( $waarde ) ? (string) $waarde : wp_json_encode( $waarde );
 
-			if ( preg_match( '/"(id|ID|post|page|value)":\s*"?\d+/', (string) $tekst ) || ( preg_match( '/(_id|Id|ID)$/', $sleutel ) && is_numeric( $waarde ) && (int) $waarde > 0 ) ) {
-				$ids_meta[] = $sleutel;
+			// Ook "ids":[12,34]: zo bewaart een element de pagina's waarop het
+			// verschijnt. Per sleutel de gevonden ID's, zodat je weet wat je moet
+			// nakijken.
+			if ( preg_match_all( '/"(?:id|ID|ids|post|page|value)":\s*(\[[^\]]*\]|"?\d+)/', (string) $tekst, $m ) || ( preg_match( '/(_id|Id|ID)$/', $sleutel ) && is_numeric( $waarde ) && (int) $waarde > 0 ) ) {
+				$gevonden_ids = array();
+
+				foreach ( ! empty( $m[1] ) ? $m[1] : array( (string) $waarde ) as $stuk ) {
+					if ( preg_match_all( '/\d+/', $stuk, $n ) ) {
+						$gevonden_ids = array_merge( $gevonden_ids, array_map( 'intval', $n[0] ) );
+					}
+				}
+
+				$gevonden_ids = array_values( array_unique( array_filter( $gevonden_ids ) ) );
+
+				if ( ! empty( $gevonden_ids ) ) {
+					$ids_meta[] = array( 'key' => $sleutel, 'ids' => $gevonden_ids );
+				}
 			}
+
+			$m = array();
 		}
 
 		if ( ! empty( $onbekend ) ) {
@@ -4485,7 +4561,7 @@ class Kadence_MCP_Abilities_Build {
 				'kadence_mcp_bad_meta_key',
 				sprintf(
 					/* translators: 1: keys, 2: post type. */
-					__( 'Deze sleutels registreert Kadence hier niet voor %2$s: %1$s. Staat er op deze site een andere Kadence-versie? Haal ze uit het pakket of werk Kadence bij.', 'mcp-abilities-kadence' ),
+					__( 'Deze sleutels neemt import-entity niet over voor %2$s: %1$s. Alleen sleutels met het prefix _kad_ die Kadence hier registreert (of die het doel al heeft) komen mee. Staat er op deze site een andere Kadence-versie? Haal ze uit het pakket of werk Kadence bij.', 'mcp-abilities-kadence' ),
 					implode( ', ', $onbekend ),
 					$type
 				)
@@ -4505,8 +4581,35 @@ class Kadence_MCP_Abilities_Build {
 			'warnings'           => current_user_can( 'unfiltered_html' ) ? array() : array( __( 'Geen unfiltered_html: WordPress haalt bij het opslaan SVG en inline-HTML door kses. Zie check-access.', 'mcp-abilities-kadence' ) ),
 		);
 
+		// Status en slug horen bij wat getoetst is: tot 1.26.1 kon een token voor
+		// een concept ook een gepubliceerd object opleveren.
+		$status = isset( $input['status'] ) && 'publish' === $input['status'] ? 'publish' : ( $doel ? $doel->post_status : 'draft' );
+		$slug   = ! $doel && isset( $pakket['slug'] ) ? sanitize_title( (string) $pakket['slug'] ) : '';
+
+		$voorstel['post_status'] = $status;
+		$voorstel['slug']        = $doel ? $doel->post_name : $slug;
+
+		// Een aanmaaktoken is anders herbruikbaar: dezelfde aanroep twee keer gaf
+		// twee objecten. Bestaat er al een met deze titel, dan beslist een mens.
+		if ( ! $doel ) {
+			$dubbel = Kadence_MCP_Inventory::bestaand_object( $type, (string) $pakket['title'] );
+
+			if ( $dubbel ) {
+				return array_merge(
+					$voorstel,
+					array(
+						'verdict'  => 'riskant',
+						'written'  => false,
+						'token'    => '',
+						'existing' => array( 'id' => $dubbel->ID, 'status' => $dubbel->post_status ),
+						'status'   => sprintf( __( 'Geen token: er bestaat al een %1$s "%2$s" (ID %3$d, %4$s). Is dit een tweede aanroep met hetzelfde token, dan is hij al aangemaakt. Wil je die overschrijven, geef dan target_id: %3$d; anders eerst een andere titel.', 'mcp-abilities-kadence' ), $type, (string) $pakket['title'], $dubbel->ID, $dubbel->post_status ),
+					)
+				);
+			}
+		}
+
 		$token    = isset( $input['token'] ) ? (string) $input['token'] : '';
-		$verwacht = 'kmcp1_' . substr( wp_hash( (string) wp_json_encode( array( $type, $doel ? $doel->ID . ':' . $doel->post_modified_gmt : 'nieuw', md5( $inhoud ), md5( wp_json_encode( $meta ) ), $pakket['title'] ) ) ), 0, 32 );
+		$verwacht = 'kmcp1_' . substr( wp_hash( (string) wp_json_encode( array( $type, $doel ? $doel->ID . ':' . $doel->post_modified_gmt : 'nieuw', md5( $inhoud ), md5( wp_json_encode( $meta ) ), $pakket['title'], $status, $slug ) ) ), 0, 32 );
 
 		if ( '' === $token ) {
 			return array_merge(
@@ -4531,11 +4634,14 @@ class Kadence_MCP_Abilities_Build {
 			return new WP_Error( 'kadence_mcp_edit_denied', __( 'Geen recht om dit object aan te maken of te bewerken (zie check-access).', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
 		}
 
+		if ( 'publish' === $status && ( ! $doel || 'publish' !== $doel->post_status ) && ! current_user_can( $type_object->cap->publish_posts ) ) {
+			return new WP_Error( 'kadence_mcp_publish_denied', __( 'Geen recht om dit posttype te publiceren (publish_posts); laat status weg voor een concept.', 'mcp-abilities-kadence' ), array( 'status' => 403 ) );
+		}
+
 		if ( ! hash_equals( $verwacht, $token ) ) {
 			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer, of het doel is intussen gewijzigd. Vraag opnieuw een voorstel.', 'mcp-abilities-kadence' ) );
 		}
 
-		$status = isset( $input['status'] ) && 'publish' === $input['status'] ? 'publish' : ( $doel ? $doel->post_status : 'draft' );
 		$velden = array(
 			'post_type'    => $type,
 			'post_title'   => (string) $pakket['title'],
@@ -4547,7 +4653,7 @@ class Kadence_MCP_Abilities_Build {
 			$velden['ID'] = $doel->ID;
 			$id           = wp_update_post( $velden, true );
 		} else {
-			$velden['post_name'] = isset( $pakket['slug'] ) ? sanitize_title( (string) $pakket['slug'] ) : '';
+			$velden['post_name'] = $slug;
 			$id                  = wp_insert_post( $velden, true );
 		}
 
@@ -4556,7 +4662,7 @@ class Kadence_MCP_Abilities_Build {
 		}
 
 		foreach ( $meta as $sleutel => $waarde ) {
-			update_post_meta( (int) $id, $sleutel, wp_slash( $waarde ) );
+			Kadence_MCP_Inventory::schrijf_meta( (int) $id, $sleutel, $waarde );
 		}
 
 		clean_post_cache( (int) $id );
@@ -4757,6 +4863,12 @@ class Kadence_MCP_Abilities_Build {
 			return new WP_Error( 'kadence_mcp_invalid_token', __( 'Het token hoort niet bij deze invoer. Roep opnieuw zonder token aan en gebruik het token dat je dan terugkrijgt.', 'mcp-abilities-kadence' ) );
 		}
 
+		$al_gebruikt = Kadence_MCP_Inventory::token_al_gebruikt( $token );
+
+		if ( is_wp_error( $al_gebruikt ) ) {
+			return $al_gebruikt;
+		}
+
 		$velden = array(
 			'post_type'    => $type,
 			'post_status'  => $status,
@@ -4777,6 +4889,8 @@ class Kadence_MCP_Abilities_Build {
 		if ( is_wp_error( $nieuw_id ) ) {
 			return $nieuw_id;
 		}
+
+		Kadence_MCP_Inventory::onthoud_token( $token, $nieuw_id );
 
 		if ( isset( $plan['featured_image'] ) ) {
 			set_post_thumbnail( $nieuw_id, $plan['featured_image']['id'] );
