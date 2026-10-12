@@ -1360,3 +1360,8 @@ de vertaling in WPML op *moet bijgewerkt*.
 3. Importeren (taal op de standaardtaal laten), dan *Run WPML Import*: de posts krijgen hun taal
    en de status uit het veld, maar staan los.
 4. `connect-translation` met `items` voor alles tegelijk, daarna de voorkant controleren.
+5. **Verwijzingen omzetten.** WPML zet post-ID's in blokken alleen om in zijn vertaaleditor. Na een
+   import wijzen `core/block` (`ref`), `kadence/query`, `kadence/query-card`, `kadence/navigation` en
+   `kadence/navigation-link` in de vertalingen nog naar de originelen, net als ACF-velden met een
+   post-ID (page_link, relatie). Zet ze om met de kaart origineel → vertaling, en lees terug. Termen
+   gaan niet mee in een WXR: eerst de termen vertalen in WPML, dan de NL-term op de NL-post zetten.
