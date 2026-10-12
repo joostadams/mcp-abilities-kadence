@@ -798,6 +798,61 @@ class Kadence_MCP_Abilities_Build {
 					'execute_callback' => array( __CLASS__, 'set_page_status' ),
 				),
 			),
+			array(
+				'name' => 'kadence/connect-translation',
+				'args' => array(
+					'label'       => __( 'Een post als vertaling koppelen (WPML)', 'mcp-abilities-kadence' ),
+					'summary'     => __( 'SCHRIJFACTIE. Koppelt een bestaande post in WPML als vertaling aan zijn origineel.', 'mcp-abilities-kadence' ),
+					'description' => __( 'Zegt tegen WPML: post X is de vertaling van post Y. Bestaat omdat een vertaling die buiten de vertaaleditor om is gemaakt (met de WordPress-importer, met create-post, met de hand) een losse post blijft: hij krijgt hooguit een taal, maar hangt aan niets, en de taalwisselaar wijst dan nergens heen. WPML Export and Import koppelt alleen als het origineel zelf de importvelden draagt, en die staan alleen in het exportbestand, niet in de database. Deze ability gebruikt de officiële WPML-hook wpml_set_element_language_details en raakt verder niets: geen inhoud, geen meta, geen status. Beide posts moeten bestaan, hetzelfde posttype hebben en dat posttype moet in WPML vertaalbaar zijn. De taal van de vertaling is de taal die WPML er nu aan geeft; geef language mee als hij nog in de taal van het origineel staat (bijvoorbeeld direct na een import). Geweigerd wordt: een origineel dat in die taal al een andere vertaling heeft (die zou los komen te hangen), en een post die zelf al vertalingen heeft (die zouden meeverhuizen). Meerdere koppelingen kunnen in één keer met items: één voorstel, één token. Twee stappen: eerst zonder token voor een voorstel met per koppeling de huidige stand (before), daarna met token om te schrijven. Er wordt teruggelezen via WPML zelf. Er is geen revisie: terugdraaien is de koppeling in de editor verbreken (Language-paneel van WPML), met before als referentie.', 'mcp-abilities-kadence' ),
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+					'input_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'original_id'    => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => __( 'Het origineel, bijvoorbeeld de Engelse pagina.', 'mcp-abilities-kadence' ),
+							),
+							'translation_id' => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => __( 'De post die de vertaling is, bijvoorbeeld de Nederlandse pagina.', 'mcp-abilities-kadence' ),
+							),
+							'language'       => array(
+								'type'        => 'string',
+								'description' => __( 'Taalcode van de vertaling zoals WPML hem kent (nl, de …). Weglaten: de taal die de vertaling nu in WPML heeft.', 'mcp-abilities-kadence' ),
+							),
+							'items'          => array(
+								'type'        => 'array',
+								'description' => __( 'In plaats van original_id en translation_id: meerdere koppelingen, één voorstel en één token. Alles of niets bij de toets.', 'mcp-abilities-kadence' ),
+								'items'       => array(
+									'type'       => 'object',
+									'properties' => array(
+										'original_id'    => array( 'type' => 'integer', 'minimum' => 1 ),
+										'translation_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+										'language'       => array( 'type' => 'string' ),
+									),
+									'required'   => array( 'original_id', 'translation_id' ),
+								),
+							),
+							'token'          => array( 'type' => 'string' ),
+						),
+						'additionalProperties' => false,
+					),
+					'output_schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'items'   => array( 'type' => 'array' ),
+							'changed' => array( 'type' => 'boolean' ),
+							'token'   => array( 'type' => 'string' ),
+							'status'  => array( 'type' => 'string' ),
+						),
+					),
+					'execute_callback' => array( __CLASS__, 'connect_translation' ),
+				),
+			),
 		);
 	}
 
@@ -5572,6 +5627,322 @@ class Kadence_MCP_Abilities_Build {
 						$na ? (string) $na->post_status : 'onbekend'
 					),
 			)
+		);
+	}
+
+	/**
+	 * De taalgegevens van een post volgens WPML.
+	 *
+	 * @param int    $post_id      De post.
+	 * @param string $element_type 'post_' + posttype.
+	 *
+	 * @return array|null trid, language en source_language; null als WPML de post niet kent.
+	 */
+	private static function wpml_taal( $post_id, $element_type ) {
+		$details = apply_filters(
+			'wpml_element_language_details',
+			null,
+			array(
+				'element_id'   => (int) $post_id,
+				'element_type' => $element_type,
+			)
+		);
+
+		if ( ! is_object( $details ) || empty( $details->trid ) ) {
+			return null;
+		}
+
+		return array(
+			'trid'            => (int) $details->trid,
+			'language'        => (string) $details->language_code,
+			'source_language' => isset( $details->source_language_code ) ? (string) $details->source_language_code : '',
+		);
+	}
+
+	/**
+	 * Koppel een post in WPML als vertaling aan zijn origineel.
+	 *
+	 * Raakt alleen de vertaaltabel van WPML (via de officiële hook), niet de
+	 * inhoud, de meta of de status. Daarom bindt het token niet aan de inhoud
+	 * maar aan de taalstand van alle betrokken posts: verandert er tussen
+	 * voorstel en schrijven een koppeling, dan vervalt het.
+	 *
+	 * @param array $input De invoer.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function connect_translation( $input = array() ) {
+		if ( ! has_filter( 'wpml_element_language_details' ) || ! has_action( 'wpml_set_element_language_details' ) ) {
+			return new WP_Error(
+				'kadence_mcp_no_wpml',
+				__( 'WPML is niet actief op deze site, of te oud: de hooks wpml_element_language_details en wpml_set_element_language_details ontbreken.', 'mcp-abilities-kadence' )
+			);
+		}
+
+		if ( ! Kadence_MCP_Capabilities::current_user_can( Kadence_MCP_Capabilities::WRITE ) ) {
+			return new WP_Error(
+				'kadence_mcp_write_denied',
+				__( 'Je hebt de capability kadence_mcp_write niet. Die wordt bij installatie aan niemand gegeven en moet bewust worden toegekend.', 'mcp-abilities-kadence' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		if ( ! empty( $input['items'] ) && is_array( $input['items'] ) ) {
+			$paren = array_values( $input['items'] );
+		} elseif ( isset( $input['original_id'], $input['translation_id'] ) ) {
+			$paren = array(
+				array(
+					'original_id'    => $input['original_id'],
+					'translation_id' => $input['translation_id'],
+					'language'       => isset( $input['language'] ) ? $input['language'] : '',
+				),
+			);
+		} else {
+			return new WP_Error( 'kadence_mcp_bad_input', __( 'Geef original_id en translation_id, of een lijst items.', 'mcp-abilities-kadence' ) );
+		}
+
+		$talen = apply_filters( 'wpml_active_languages', null, array( 'skip_missing' => 0 ) );
+		$talen = is_array( $talen ) ? $talen : array();
+
+		$plan          = array();
+		$vertalingen   = array();
+		$plekken       = array();
+		$eerste_post   = null;
+
+		foreach ( $paren as $i => $paar ) {
+			$nr = $i + 1;
+			$o  = get_post( isset( $paar['original_id'] ) ? (int) $paar['original_id'] : 0 );
+			$v  = get_post( isset( $paar['translation_id'] ) ? (int) $paar['translation_id'] : 0 );
+
+			if ( ! $o || ! $v ) {
+				/* translators: %d: item number. */
+				return new WP_Error( 'kadence_mcp_post_not_found', sprintf( __( 'Koppeling %d: het origineel of de vertaling bestaat niet.', 'mcp-abilities-kadence' ), $nr ) );
+			}
+
+			if ( $o->ID === $v->ID ) {
+				/* translators: %d: item number. */
+				return new WP_Error( 'kadence_mcp_bad_input', sprintf( __( 'Koppeling %d: origineel en vertaling zijn dezelfde post.', 'mcp-abilities-kadence' ), $nr ) );
+			}
+
+			if ( $o->post_type !== $v->post_type ) {
+				return new WP_Error(
+					'kadence_mcp_bad_input',
+					/* translators: 1: item number, 2: original type, 3: translation type. */
+					sprintf( __( 'Koppeling %1$d: het origineel is een %2$s en de vertaling een %3$s. WPML koppelt alleen binnen één posttype.', 'mcp-abilities-kadence' ), $nr, $o->post_type, $v->post_type )
+				);
+			}
+
+			if ( ! current_user_can( 'edit_post', $o->ID ) || ! current_user_can( 'edit_post', $v->ID ) ) {
+				return new WP_Error(
+					'kadence_mcp_edit_denied',
+					/* translators: %d: item number. */
+					sprintf( __( 'Koppeling %d: je mag het origineel of de vertaling volgens WordPress zelf niet bewerken.', 'mcp-abilities-kadence' ), $nr ),
+					array( 'status' => 403 )
+				);
+			}
+
+			if ( ! apply_filters( 'wpml_is_translated_post_type', null, $o->post_type ) ) {
+				return new WP_Error(
+					'kadence_mcp_not_translatable',
+					/* translators: 1: item number, 2: post type. */
+					sprintf( __( 'Koppeling %1$d: het posttype %2$s staat in WPML op niet vertaalbaar. Zet dat eerst om onder WPML > Settings > Post Types Translation.', 'mcp-abilities-kadence' ), $nr, $o->post_type )
+				);
+			}
+
+			$soort = 'post_' . $o->post_type;
+			$od    = self::wpml_taal( $o->ID, $soort );
+			$vd    = self::wpml_taal( $v->ID, $soort );
+
+			if ( ! $od ) {
+				return new WP_Error(
+					'kadence_mcp_no_language',
+					/* translators: 1: item number, 2: post ID. */
+					sprintf( __( 'Koppeling %1$d: het origineel (%2$d) heeft in WPML geen taal. Geef het eerst een taal in de editor.', 'mcp-abilities-kadence' ), $nr, $o->ID )
+				);
+			}
+
+			$taal = isset( $paar['language'] ) && '' !== (string) $paar['language']
+				? (string) $paar['language']
+				: ( $vd ? $vd['language'] : '' );
+
+			if ( '' === $taal || ! isset( $talen[ $taal ] ) ) {
+				return new WP_Error(
+					'kadence_mcp_bad_language',
+					sprintf(
+						/* translators: 1: item number, 2: language code, 3: active languages. */
+						__( 'Koppeling %1$d: taal "%2$s" is geen actieve taal in WPML. Actief: %3$s.', 'mcp-abilities-kadence' ),
+						$nr,
+						$taal,
+						implode( ', ', array_keys( $talen ) )
+					)
+				);
+			}
+
+			if ( $taal === $od['language'] ) {
+				return new WP_Error(
+					'kadence_mcp_bad_language',
+					sprintf(
+						/* translators: 1: item number, 2: language code. */
+						__( 'Koppeling %1$d: de vertaling zou in dezelfde taal (%2$s) komen als het origineel. Staat de vertaling nog in de taal van het origineel, bijvoorbeeld na een import, geef dan language mee.', 'mcp-abilities-kadence' ),
+						$nr,
+						$taal
+					)
+				);
+			}
+
+			$al = $vd && $vd['trid'] === $od['trid'] && $vd['language'] === $taal;
+
+			if ( ! $al ) {
+				$groep = apply_filters( 'wpml_get_element_translations', null, $od['trid'], $soort );
+
+				if ( is_array( $groep ) && isset( $groep[ $taal ] ) && (int) $groep[ $taal ]->element_id !== (int) $v->ID ) {
+					return new WP_Error(
+						'kadence_mcp_translation_taken',
+						sprintf(
+							/* translators: 1: item number, 2: original ID, 3: language, 4: existing translation ID. */
+							__( 'Koppeling %1$d: origineel %2$d heeft in %3$s al een vertaling (%4$d). Die zou los komen te hangen. Verbreek eerst die koppeling, of koppel aan die post.', 'mcp-abilities-kadence' ),
+							$nr,
+							$o->ID,
+							$taal,
+							(int) $groep[ $taal ]->element_id
+						)
+					);
+				}
+
+				if ( $vd ) {
+					$eigen = apply_filters( 'wpml_get_element_translations', null, $vd['trid'], $soort );
+
+					foreach ( (array) $eigen as $lid ) {
+						if ( (int) $lid->element_id !== (int) $v->ID ) {
+							return new WP_Error(
+								'kadence_mcp_has_translations',
+								sprintf(
+									/* translators: 1: item number, 2: translation ID, 3: other post ID. */
+									__( 'Koppeling %1$d: post %2$d hangt al samen met post %3$d. Die koppeling zou meeverhuizen. Verbreek hem eerst.', 'mcp-abilities-kadence' ),
+									$nr,
+									$v->ID,
+									(int) $lid->element_id
+								)
+							);
+						}
+					}
+				}
+			}
+
+			if ( isset( $vertalingen[ $v->ID ] ) ) {
+				/* translators: 1: item number, 2: post ID. */
+				return new WP_Error( 'kadence_mcp_bad_input', sprintf( __( 'Koppeling %1$d: post %2$d staat twee keer als vertaling in de lijst.', 'mcp-abilities-kadence' ), $nr, $v->ID ) );
+			}
+
+			$plek = $od['trid'] . '|' . $taal;
+
+			if ( isset( $plekken[ $plek ] ) ) {
+				/* translators: 1: item number, 2: original ID, 3: language. */
+				return new WP_Error( 'kadence_mcp_bad_input', sprintf( __( 'Koppeling %1$d: origineel %2$d krijgt in %3$s twee vertalingen in deze lijst.', 'mcp-abilities-kadence' ), $nr, $o->ID, $taal ) );
+			}
+
+			$vertalingen[ $v->ID ] = true;
+			$plekken[ $plek ]      = true;
+
+			if ( null === $eerste_post ) {
+				$eerste_post = $o;
+			}
+
+			$plan[] = array(
+				'original'        => array(
+					'id'       => (int) $o->ID,
+					'title'    => (string) $o->post_title,
+					'language' => $od['language'],
+				),
+				'translation'     => array(
+					'id'    => (int) $v->ID,
+					'title' => (string) $v->post_title,
+				),
+				'type'            => (string) $o->post_type,
+				'language'        => $taal,
+				'already_linked'  => $al,
+				'before'          => $vd ? $vd : array(
+					'trid'            => 0,
+					'language'        => '',
+					'source_language' => '',
+				),
+				'trid'            => $od['trid'],
+			);
+		}
+
+		$verwacht = Kadence_MCP_Inventory::schrijf_token( $eerste_post, 'connect-translation', array( 'plan' => $plan ) );
+		$token    = isset( $input['token'] ) ? (string) $input['token'] : '';
+		$te_doen  = count( array_filter( $plan, function ( $p ) {
+			return ! $p['already_linked'];
+		} ) );
+
+		if ( '' === $token ) {
+			return array(
+				'items'   => $plan,
+				'changed' => false,
+				'token'   => 0 === $te_doen ? '' : $verwacht,
+				'status'  => 0 === $te_doen
+					? __( 'Voorstel, er is NIETS gewijzigd — alle koppelingen staan er al.', 'mcp-abilities-kadence' )
+					: sprintf(
+						/* translators: 1: number to link, 2: total. */
+						__( 'Voorstel, er is NIETS gewijzigd. %1$d van %2$d koppelingen worden gelegd; before toont per vertaling de huidige stand in WPML, bewaar die. Roep opnieuw aan met het token om te schrijven.', 'mcp-abilities-kadence' ),
+						$te_doen,
+						count( $plan )
+					),
+			);
+		}
+
+		if ( ! hash_equals( $verwacht, $token ) ) {
+			return new WP_Error(
+				'kadence_mcp_bad_token',
+				__( 'Het token past niet meer bij deze koppelingen: de invoer is anders, of de taalstand van een van de posts is intussen veranderd. Roep de ability opnieuw zonder token aan.', 'mcp-abilities-kadence' )
+			);
+		}
+
+		$alles_goed = true;
+
+		foreach ( $plan as $k => $p ) {
+			if ( ! $p['already_linked'] ) {
+				do_action(
+					'wpml_set_element_language_details',
+					array(
+						'element_id'           => $p['translation']['id'],
+						'element_type'         => 'post_' . $p['type'],
+						'trid'                 => $p['trid'],
+						'language_code'        => $p['language'],
+						'source_language_code' => $p['original']['language'],
+					)
+				);
+			}
+
+			do_action( 'wpml_cache_clear' );
+
+			$na     = self::wpml_taal( $p['translation']['id'], 'post_' . $p['type'] );
+			$wijst  = (int) apply_filters( 'wpml_object_id', $p['original']['id'], $p['type'], false, $p['language'] );
+			$klopt  = $na
+				&& $na['trid'] === $p['trid']
+				&& $na['language'] === $p['language']
+				&& $wijst === $p['translation']['id'];
+
+			$plan[ $k ]['after']  = $na;
+			$plan[ $k ]['linked'] = $klopt;
+
+			if ( ! $klopt ) {
+				$alles_goed = false;
+			}
+		}
+
+		return array(
+			'items'   => $plan,
+			'changed' => $te_doen > 0,
+			'token'   => '',
+			'status'  => $alles_goed
+				? sprintf(
+					/* translators: %d: number of links. */
+					__( 'Geschreven en teruggelezen via WPML: %d koppeling(en) kloppen (trid, taal, en wpml_object_id wijst van het origineel naar de vertaling). Controleer de taalwisselaar op de voorkant; een gecachte pagina kan de oude stand nog tonen.', 'mcp-abilities-kadence' ),
+					count( $plan )
+				)
+				: __( 'LET OP: niet elke koppeling klopt bij het teruglezen. Kijk per item naar linked en after, en controleer in WPML.', 'mcp-abilities-kadence' ),
 		);
 	}
 }

@@ -3,7 +3,7 @@
 Geeft een MCP-agent toegang tot Kadence Blocks, Kadence Blocks Pro, Kadence Pro
 en het Kadence-thema, via de WordPress Abilities API.
 
-**Achtenveertig abilities: drieëntwintig lezen, vijfentwintig schrijven.**
+**Negenenveertig abilities: drieëntwintig lezen, zesentwintig schrijven.**
 
 Schrijven is hier dus geen uitzondering. Elke schrijfability vraagt drie dingen:
 de capability `kadence_mcp_write` (die bij installatie aan niemand wordt
@@ -62,6 +62,7 @@ post.
 | `kadence/update-post` | een bestaande post van zo een posttype bijwerken: titel, slug, samenvatting, volgorde, afbeelding, termen en ACF-velden — ACF en termen zonder revisie |
 | `kadence/create-entity` | een lege navigatie, header of element met de volledige set instellingen van Kadence, of een vector uit een SVG — standaard als concept |
 | `kadence/set-page-status` | concept naar gepubliceerd, of terug |
+| `kadence/connect-translation` | een bestaande post in WPML als vertaling aan zijn origineel koppelen, los of als lijst — raakt alleen de vertaaltabel van WPML |
 | `kadence/replace-colors` | kleuren omzetten over de hele site met een kaart {oud: nieuw}, met bewuste uitzonderingen (opacity, core-blokken, Gravity Forms) |
 | `kadence/update-entity-content` | tekst vervangen in de SVG van een vector of de JSON van een custom SVG, met verwacht aantal en verliescontrole |
 | `kadence/trash-post` | een post in de prullenbak, na een controle waar hij nog gebruikt wordt — nooit definitief |

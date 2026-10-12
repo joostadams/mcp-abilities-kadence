@@ -8,7 +8,7 @@ description: "Werkwijze en valkuilen bij het uitlezen én wijzigen van een Kaden
 Deze skill beschrijft hoe je de Kadence MCP-server gebruikt zonder de fouten te
 maken die de toolschema's niet kunnen voorkomen.
 
-De server telt achtenveertig abilities: drieëntwintig lezen, vijfentwintig schrijven.
+De server telt negenenveertig abilities: drieëntwintig lezen, zesentwintig schrijven.
 **Schrijven is dus geen uitzondering** — controleer per tool of hij schrijft, in
 plaats van ervan uit te gaan dat lezen de norm is.
 
@@ -1322,3 +1322,28 @@ in één keer met `set-entity-meta` en `items`.
 - `find-usages` scant een begrensd aantal posts. Staat er in de statusregel dat
   de scan begrensd was, meld dat dan mee in plaats van "nergens gebruikt" te
   zeggen.
+
+## Vertalingen koppelen (WPML): `connect-translation`
+
+De MCP kent geen talen: een Nederlandse pagina is voor `inspect-post` en de
+schrijftools een gewone post. Een vertaling die buiten de vertaaleditor om is
+gemaakt (WordPress-importer, `create-post`, met de hand) krijgt hooguit een taal,
+maar hangt aan niets. De taalwisselaar wijst dan nergens heen, en in de
+paginalijst staat bij het origineel een plus in plaats van een potlood.
+
+WPML Export and Import lost dat niet op voor content die al op de site staat: het
+koppelt via drie importvelden (`_wpml_import_translation_group`, `…_language_code`,
+`…_source_language_code`), en die zet de export alleen in het **bestand**, niet op
+het origineel in de database. De vertaling krijgt dan wel `nl`, maar vindt geen
+partner (waargenomen bij Ouwerkerk Logistics, 12-10-2026).
+
+`connect-translation` legt de koppeling met de officiële hook
+`wpml_set_element_language_details` en leest terug via WPML zelf (trid, taal, en
+`wpml_object_id` van origineel naar vertaling). Meerdere koppelingen in één keer met
+`items`. Geef `language` mee als de vertaling nog in de taal van het origineel staat
+(direct na een import). Geweigerd wordt een origineel dat in die taal al een andere
+vertaling heeft, en een post die zelf al vertalingen heeft: die zouden los komen te
+hangen of meeverhuizen.
+
+Schrijf eerst het origineel, dan de vertaling: een schrijfactie op het origineel zet
+de vertaling in WPML op *moet bijgewerkt*.

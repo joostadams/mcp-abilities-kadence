@@ -4,7 +4,7 @@ Tags: mcp, kadence, abilities, ai
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.26.1
+Stable tag: 1.27.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,17 +12,17 @@ Kadence Blocks, Kadence Blocks Pro, Kadence Pro en het Kadence-thema uitlezen en
 
 == Description ==
 
-Achtenveertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
+Negenenveertig abilities voor de WordPress Abilities API, waarmee een MCP-assistent
 de Kadence-opbouw van een site kan uitlezen en gericht kan wijzigen: welke
 blokken er zijn, welke attributen die hebben, hoe een pagina is opgebouwd,
 welke headers en elementen er staan, en welk kleurenpalet er geldt.
 
-Drieëntwintig daarvan zijn alleen-lezen. Vijfentwintig schrijven: set-attributes,
+Drieëntwintig daarvan zijn alleen-lezen. Zesentwintig schrijven: set-attributes,
 style-blocks, set-text, insert-blocks, remove-blocks, move-blocks, duplicate-blocks,
-replace-block, create-page, create-entity, create-post, update-post, set-page-status, create-query, create-query-card,
+replace-block, create-page, create-entity, create-post, update-post, set-page-status, connect-translation, create-query, create-query-card,
 set-query, sync-query-facets, set-card-layout, set-entity-meta,
 set-global-typography, set-site-css, replace-colors, update-entity-content,
-trash-post en import-entity. Ze vragen alle vijfentwintig een eigen capability (kadence_mcp_write, die na installatie aan
+trash-post en import-entity. Ze vragen alle zesentwintig een eigen capability (kadence_mcp_write, die na installatie aan
 niemand is toegekend), bewerkrecht op de post volgens WordPress, en een token
 uit een voorafgaande controlestap. Na elke schrijfactie wordt de post
 teruggelezen en vergeleken met wat er bedoeld was.
@@ -39,6 +39,9 @@ Kadence Blocks > MCP.
 Vereist de WordPress Abilities API en de MCP Adapter.
 
 == Changelog ==
+
+= 1.27.0 =
+* Nieuw: kadence/connect-translation. Koppelt een bestaande post in WPML als vertaling aan zijn origineel, via de officiële hook wpml_set_element_language_details; los of als lijst (items, één token). Nodig omdat een vertaling die buiten de vertaaleditor om is gemaakt (WordPress-importer, create-post) los blijft staan: WPML Export and Import koppelt alleen als het origineel de importvelden in de database draagt, en die staan alleen in het exportbestand. Weigert een origineel dat in die taal al een andere vertaling heeft, een post die zelf al vertalingen heeft, een niet-vertaalbaar posttype en een inactieve taal. Leest terug via WPML (trid, taal en wpml_object_id). Raakt geen inhoud, meta of status.
 
 = 1.26.1 =
 Fixes uit de review van 2026-09-28. Pas met deze versie de vier nieuwe schrijf-abilities aanzetten.
