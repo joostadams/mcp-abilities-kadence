@@ -1347,3 +1347,16 @@ hangen of meeverhuizen.
 
 Schrijf eerst het origineel, dan de vertaling: een schrijfactie op het origineel zet
 de vertaling in WPML op *moet bijgewerkt*.
+
+**De beproefde route voor vertalingen die al klaarliggen** (Ouwerkerk Logistics, 12-10-2026):
+
+1. Een WXR met per item de vertaalde post: dezelfde blokken met de vertaalde tekst,
+   `_wpml_import_translation_group` (ID van het origineel), `_wpml_import_language_code`,
+   `_wpml_import_source_language_code`, en `_wpml_import_after_process_post_status` `publish`.
+2. **Post-ID's vanaf de huidige teller.** De WordPress-importer neemt een vrij ID uit het
+   bestand over; een hoog getal laat `AUTO_INCREMENT` springen. Terugzetten kan pas als alles
+   erboven weg is, en `ALTER TABLE wp_posts AUTO_INCREMENT` faalt op WordPress-tabellen met
+   *1067 Invalid default value for 'post_date'* tot je `SET SESSION sql_mode = ''` draait.
+3. Importeren (taal op de standaardtaal laten), dan *Run WPML Import*: de posts krijgen hun taal
+   en de status uit het veld, maar staan los.
+4. `connect-translation` met `items` voor alles tegelijk, daarna de voorkant controleren.
