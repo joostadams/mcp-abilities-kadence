@@ -894,6 +894,30 @@ Dit is precies het soort fout dat alleen in de browser zichtbaar is. Meet het:
 Playwright kan `getComputedStyle` uitvoeren, en dan zie je `rgb(10,10,10)` waar
 je wit verwachtte.
 
+## Een eigen klasse (`className`): op een Sectie ook de markup
+
+Een eigen klasse zetten lijkt overal hetzelfde, maar is het niet. Waargenomen
+30-10-2026 (Sportraad Utrecht, pagina 18, één `style-blocks`-aanroep op twee Row
+Layouts en één Sectie):
+
+| Blok | Waar `className` landt | Gevolg van `style-blocks` / `set-attributes` |
+|---|---|---|
+| `kadence/rowlayout` | alleen in het blokcommentaar; de rij slaat geen markup op en zet de klasse bij het renderen | klaar, geen nawerk |
+| `kadence/column` (Sectie) | óók in de opgeslagen `<div class="wp-block-kadence-column …">` | alleen het attribuut wijzigt; het antwoord meldt `class_drift` met `missing: [<klasse>]` |
+
+Bij die drift ziet de voorkant er goed uit (de render leest het attribuut), maar
+de editor noemt het blok bij de volgende keer openen **ongeldige inhoud**. Herstel
+het meteen met **`replace-block`** zonder `block` en zonder attributen: hij bouwt
+de markup opnieuw op uit de attributen, met hetzelfde uniqueID, de kinderen en de
+bloknaam (`metadata.name`). Eerst zonder token voor het voorstel (controleer in
+`markup` dat de klasse in de `<div>` staat en de kinderen er nog zijn), dan met
+het token.
+
+Lees dus na elke schrijfactie het veld `class_drift`, niet alleen `verdict` en
+`written`. Code die op de klasse reageert via `render_block` leest
+`$block['attrs']['className']` en werkt ook zonder de markup; dat is geen reden
+om de drift te laten staan.
+
 ## Een highlight vraagt om `mark.kt-highlight`
 
 `markBG`, `markColor` en `markPadding` maken een gekleurd kadertje om een stukje
